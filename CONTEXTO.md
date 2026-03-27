@@ -24,11 +24,15 @@ Plugin WordPress de archivo único (`viva-pre-evm.php`) que implementa un **Test
 
 ```
 /wp-content/plugins/viva-pre-evm/
-├── viva-pre-evm.php          ← TODO el plugin (~2972 líneas)
+├── viva-pre-evm.php          ← TODO el plugin (~3100 líneas)
 ├── osl_shortage_2025.json    ← Datos OSL 2025 (916 registros, ~223KB)
+├── occupations.json          ← Ocupaciones enriquecidas (916 registros, ~908KB)
 └── .github/workflows/
     └── deploy.yml            ← GitHub Actions FTP deploy (ver nota abajo)
 ```
+
+**Script de construcción de occupations.json:** `/Users/macbookpro/Desktop/PreEVM/build_occupations.py`
+Re-ejecutar si se actualiza `osl_shortage_2025.json`.
 
 **Archivo único:** el plugin no usa carpetas `includes/`, `assets/`, ni autoload. Todo — PHP, CSS, HTML, JS — está en `viva-pre-evm.php`. Esta es una decisión deliberada para simplificar el deploy.
 
