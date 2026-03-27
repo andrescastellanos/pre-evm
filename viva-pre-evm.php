@@ -1106,7 +1106,20 @@ function viva_rest_save_result( WP_REST_Request $req ) {
         '_preevm_timestamp'          => current_time( 'mysql' ),
     ];
     foreach ( $meta_fields as $k => $v ) update_post_meta( $post_id, $k, $v );
-    return [ 'resultUrl' => get_permalink( $post_id ), 'resultId' => $post_id ];
+    $result_url = get_permalink( $post_id );
+
+    // Actualizar preevm_result_link en GHL directamente desde PHP —
+    // más fiable que una segunda llamada JS.
+    $email = sanitize_email( $data['email'] ?? '' );
+    if ( $email && $result_url ) {
+        viva_ghl_request( 'POST', '/contacts/upsert', [
+            'locationId'   => GHL_LOCATION_ID,
+            'email'        => $email,
+            'customFields' => [ [ 'key' => 'preevm_result_link', 'field_value' => $result_url ] ],
+        ] );
+    }
+
+    return [ 'resultUrl' => $result_url, 'resultId' => $post_id ];
 }
 
 // ── Save Draft ────────────────────────────────────────────────
@@ -1124,6 +1137,18 @@ function viva_rest_save_draft( WP_REST_Request $req ) {
     update_post_meta( $post_id, '_preevm_draft_expiry', time() + 30 * DAY_IN_SECONDS );
     $page_url     = viva_get_shortcode_page_url();
     $continue_url = add_query_arg( 'continuar', $token, $page_url );
+
+    // Actualizar preevm_continue_link en GHL directamente desde PHP —
+    // más fiable que una segunda llamada JS.
+    $email = sanitize_email( $data['email'] ?? '' );
+    if ( $email && $continue_url ) {
+        viva_ghl_request( 'POST', '/contacts/upsert', [
+            'locationId'   => GHL_LOCATION_ID,
+            'email'        => $email,
+            'customFields' => [ [ 'key' => 'preevm_continue_link', 'field_value' => $continue_url ] ],
+        ] );
+    }
+
     return [ 'continueUrl' => $continue_url, 'token' => $token ];
 }
 
