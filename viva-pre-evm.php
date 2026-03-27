@@ -34,6 +34,23 @@ add_action( 'admin_init',         'viva_preevm_settings_init'        );
 add_action( 'wp_enqueue_scripts', 'viva_preevm_enqueue'              );
 add_shortcode( 'viva_pre_evm',    'viva_preevm_shortcode'            );
 add_filter( 'the_content',        'viva_preevm_result_content'       );
+// ── Admin columns para preevm_result ──────────────────────────
+add_filter( 'manage_preevm_result_posts_columns',       'viva_preevm_admin_columns'        );
+add_action( 'manage_preevm_result_posts_custom_column', 'viva_preevm_admin_column_content', 10, 2 );
+add_filter( 'manage_edit-preevm_result_sortable_columns','viva_preevm_sortable_columns'     );
+add_action( 'pre_get_posts',                            'viva_preevm_admin_sort_query'     );
+add_action( 'restrict_manage_posts',                    'viva_preevm_admin_filter_ui'      );
+add_filter( 'parse_query',                              'viva_preevm_admin_filter_query'   );
+// ── Cron limpieza de drafts expirados ─────────────────────────
+add_action( 'viva_preevm_cleanup_drafts',               'viva_preevm_do_cleanup_drafts'    );
+register_activation_hook( __FILE__, function () {
+    if ( ! wp_next_scheduled( 'viva_preevm_cleanup_drafts' ) ) {
+        wp_schedule_event( time(), 'daily', 'viva_preevm_cleanup_drafts' );
+    }
+} );
+register_deactivation_hook( __FILE__, function () {
+    wp_clear_scheduled_hook( 'viva_preevm_cleanup_drafts' );
+} );
 
 // ═══════════════════════════════════════════════════════════════
 // ENQUEUE
@@ -346,6 +363,96 @@ function viva_preevm_register_cpts() {
         'capability_type' => 'post',
         'supports'        => [ 'title' ],
     ] );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ADMIN — COLUMNAS Y FILTROS PARA preevm_result
+// ═══════════════════════════════════════════════════════════════
+function viva_preevm_admin_columns( $cols ) {
+    return [
+        'cb'         => $cols['cb'],
+        'title'      => 'Candidato',
+        'viability'  => 'Resultado',
+        'score'      => 'Puntaje',
+        'profession' => 'Profesión',
+        'country'    => 'País',
+        'email'      => 'Email',
+        'date'       => 'Fecha',
+    ];
+}
+
+function viva_preevm_admin_column_content( $col, $pid ) {
+    $badges = [
+        'apto'    => '<span style="background:#0FBE7C22;color:#0FBE7C;border:1px solid #0FBE7C44;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">✅ Apto</span>',
+        'parcial' => '<span style="background:#F59E0B22;color:#F59E0B;border:1px solid #F59E0B44;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">⚠️ Parcial</span>',
+        'no-apto' => '<span style="background:#EF444422;color:#EF4444;border:1px solid #EF444444;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600">❌ No apto</span>',
+    ];
+    switch ( $col ) {
+        case 'viability':
+            $v = get_post_meta( $pid, '_preevm_viability', true );
+            echo $badges[ $v ] ?? esc_html( $v );
+            break;
+        case 'score':
+            $pts = absint( get_post_meta( $pid, '_preevm_puntaje', true ) );
+            $color = $pts >= 80 ? '#0FBE7C' : ( $pts >= 65 ? '#F59E0B' : '#EF4444' );
+            echo '<strong style="color:' . $color . '">' . $pts . '</strong> pts';
+            break;
+        case 'profession':
+            echo esc_html( get_post_meta( $pid, '_preevm_profesion', true ) );
+            break;
+        case 'country':
+            echo esc_html( get_post_meta( $pid, '_preevm_pais', true ) );
+            break;
+        case 'email':
+            $em = get_post_meta( $pid, '_preevm_email', true );
+            echo '<a href="mailto:' . esc_attr( $em ) . '">' . esc_html( $em ) . '</a>';
+            break;
+    }
+}
+
+function viva_preevm_sortable_columns( $cols ) {
+    $cols['score'] = 'preevm_score_sort';
+    return $cols;
+}
+
+function viva_preevm_admin_sort_query( WP_Query $q ) {
+    if ( ! is_admin() || $q->get( 'post_type' ) !== 'preevm_result' ) return;
+    if ( $q->get( 'orderby' ) === 'preevm_score_sort' ) {
+        $q->set( 'meta_key', '_preevm_puntaje' );
+        $q->set( 'orderby',  'meta_value_num' );
+    }
+}
+
+function viva_preevm_admin_filter_ui( $post_type ) {
+    if ( $post_type !== 'preevm_result' ) return;
+    $current = $_GET['preevm_via_filter'] ?? '';
+    echo '<select name="preevm_via_filter">';
+    echo '<option value="">Todos los resultados</option>';
+    foreach ( [ 'apto' => '✅ Apto', 'parcial' => '⚠️ Parcial', 'no-apto' => '❌ No apto' ] as $val => $label ) {
+        $sel = selected( $current, $val, false );
+        echo '<option value="' . esc_attr( $val ) . '"' . $sel . '>' . esc_html( $label ) . '</option>';
+    }
+    echo '</select>';
+}
+
+function viva_preevm_admin_filter_query( WP_Query $q ) {
+    if ( ! is_admin() || $q->get( 'post_type' ) !== 'preevm_result' ) return;
+    $f = sanitize_text_field( $_GET['preevm_via_filter'] ?? '' );
+    if ( $f ) {
+        $q->set( 'meta_query', [ [ 'key' => '_preevm_viability', 'value' => $f, 'compare' => '=' ] ] );
+    }
+}
+
+// ── Cron: limpieza de drafts expirados ────────────────────────
+function viva_preevm_do_cleanup_drafts() {
+    $posts = get_posts( [
+        'post_type'      => 'preevm_draft',
+        'posts_per_page' => 200,
+        'meta_query'     => [ [ 'key' => '_preevm_draft_expiry', 'value' => time(), 'compare' => '<', 'type' => 'NUMERIC' ] ],
+    ] );
+    foreach ( $posts as $p ) {
+        wp_delete_post( $p->ID, true );
+    }
 }
 
 // Renderizar resultado en la página del CPT
