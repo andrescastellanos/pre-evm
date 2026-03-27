@@ -378,11 +378,12 @@ function viva_render_result_page( $r ) {
     $pts       = absint( $r['pts'] ?? 0 );
     $viaPct    = absint( $r['viaPct'] ?? 0 );
     $compPct   = absint( $r['compPct'] ?? 0 );
-    $anzsco    = is_array( $r['anzsco'] ?? null ) ? $r['anzsco'] : [];
-    $visas     = is_array( $r['visas'] ?? null ) ? $r['visas'] : [];
-    $variables = is_array( $r['variables'] ?? null ) ? $r['variables'] : [];
-    $recom     = is_array( $r['recomendaciones'] ?? null ) ? $r['recomendaciones'] : [];
-    $bloq      = is_array( $r['bloqueantes'] ?? null ) ? $r['bloqueantes'] : [];
+    $anzsco      = is_array( $r['anzsco'] ?? null ) ? $r['anzsco'] : [];
+    $visas       = is_array( $r['visas'] ?? null ) ? $r['visas'] : [];
+    $variables   = is_array( $r['variables'] ?? null ) ? $r['variables'] : [];
+    $recom       = is_array( $r['recomendaciones'] ?? null ) ? $r['recomendaciones'] : [];
+    $bloq        = is_array( $r['bloqueantes'] ?? null ) ? $r['bloqueantes'] : [];
+    $shortage_map = is_array( $r['shortageMap'] ?? null ) ? $r['shortageMap'] : [];
     $desglose  = is_array( $r['desglosePuntos'] ?? null ) ? $r['desglosePuntos'] : [];
     $icons_map = [
         'cake'=>'🎂','speech'=>'🗣️','briefcase'=>'💼','clipboard'=>'📋','grad'=>'🎓',
@@ -436,6 +437,22 @@ function viva_render_result_page( $r ) {
     .vp-sa .pts-pos{color:#0FBE7C}
     .vp-sa .pts-zero{color:#7A8EA8}
     .vp-sa .nota-nom{font-size:12px;color:#7A8EA8;margin-top:10px;line-height:1.6}
+    .vp-sa .shortage-wrap{margin-top:14px;border-top:1px solid rgba(255,255,255,.06);padding-top:14px}
+    .vp-sa .shortage-title{font-size:13px;font-weight:700;color:#7A8EA8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px}
+    .vp-sa .shortage-occ{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px;margin-bottom:10px}
+    .vp-sa .shortage-occ-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+    .vp-sa .shortage-occ-name{font-weight:600;font-size:14px}
+    .vp-sa .shortage-nat{font-size:12px;color:#7A8EA8;margin-left:auto}
+    .vp-sa .shortage-states{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px;margin-bottom:10px}
+    .vp-sa .shortage-state{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.04);border-radius:8px;padding:6px 10px;font-size:12px}
+    .vp-sa .shortage-state.s .s-name{color:#0FBE7C;font-weight:700}
+    .vp-sa .shortage-state.r .s-name{color:#60A5FA;font-weight:700}
+    .vp-sa .shortage-state.m .s-name{color:#F59E0B;font-weight:700}
+    .vp-sa .shortage-state .s-lbl{color:#7A8EA8;font-size:11px;flex:1;text-align:right}
+    .vp-sa .shortage-demand{font-size:12px;color:rgba(255,255,255,.65);margin-bottom:8px}
+    .vp-sa .shortage-link{font-size:12px}
+    .vp-sa .shortage-link a{color:#E8600A;text-decoration:none}
+    .vp-sa .shortage-link a:hover{text-decoration:underline}
     .vp-sa .footer{text-align:center;padding:24px 0 0;color:#7A8EA8;font-size:12px;border-top:1px solid rgba(255,255,255,.07);margin-top:24px}
     @media(max-width:600px){.vp-sa .scores{grid-template-columns:1fr 1fr}.vp-sa .meta{gap:10px}}
     </style>
@@ -559,6 +576,49 @@ function viva_render_result_page( $r ) {
           </div>
         </div>
         <?php endforeach; ?>
+
+        <?php if ( ! empty( $shortage_map ) ) :
+          $states_labels = [ 'NSW'=>'Nueva Gales del Sur', 'VIC'=>'Victoria', 'QLD'=>'Queensland', 'SA'=>'Australia del Sur', 'WA'=>'Australia Occidental', 'TAS'=>'Tasmania', 'NT'=>'Territorio del Norte', 'ACT'=>'Territorio de la Capital' ];
+          $rating_icons  = [ 'S'=>'🟢', 'R'=>'🔵', 'M'=>'🟡', 'NS'=>'⚪' ];
+          $rating_labels = [ 'S'=>'Escasez confirmada', 'R'=>'Escasez regional', 'M'=>'Escasez metropolitana', 'NS'=>'Sin escasez declarada' ];
+          $demand_labels = [ 'very_high'=>'Muy alta — escasez en casi todo el país', 'high'=>'Alta — escasez en la mayoría de estados', 'moderate'=>'Moderada — escasez en algunos estados', 'some'=>'Localizada — escasez puntual', 'none'=>'Sin escasez detectada' ];
+        ?>
+        <div class="shortage-wrap">
+          <div class="shortage-title">🗺️ Demanda laboral por estado (OSL 2025)</div>
+          <?php foreach ( $shortage_map as $az_code => $sh ) :
+            $az_name = '';
+            foreach ( $anzsco as $a ) { if ( ( $a['code'] ?? '' ) === $az_code ) { $az_name = $a['name'] ?? ''; break; } }
+            $nat_ico   = $rating_icons[ $sh['national'] ?? 'NS' ] ?? '⚪';
+            $nat_label = $rating_labels[ $sh['national'] ?? 'NS' ] ?? $sh['national'];
+            $dem_label = $demand_labels[ $sh['demandLevel'] ?? 'none' ] ?? '';
+            $jsa_url   = 'https://www.jobsandskills.gov.au/jobs-and-skills-atlas/occupation?occupationFocus=' . substr( $az_code, 0, 4 );
+          ?>
+          <div class="shortage-occ">
+            <div class="shortage-occ-h">
+              <span class="az-code"><?php echo esc_html( $az_code ); ?></span>
+              <span class="shortage-occ-name"><?php echo esc_html( $az_name ); ?></span>
+              <span class="shortage-nat"><?php echo $nat_ico; ?> Nacional: <?php echo esc_html( $nat_label ); ?></span>
+            </div>
+            <div class="shortage-states">
+              <?php foreach ( $sh['byState'] ?? [] as $state => $rating ) :
+                $ico = $rating_icons[ $rating ] ?? '⚪';
+                $lbl = $states_labels[ $state ] ?? $state;
+              ?>
+              <div class="shortage-state <?php echo strtolower( $rating ); ?>">
+                <span class="s-ico"><?php echo $ico; ?></span>
+                <span class="s-name"><?php echo esc_html( $state ); ?></span>
+                <span class="s-lbl"><?php echo esc_html( $rating_labels[ $rating ] ?? $rating ); ?></span>
+              </div>
+              <?php endforeach; ?>
+            </div>
+            <?php if ( $dem_label ) : ?>
+            <div class="shortage-demand">📊 Nivel de demanda: <strong><?php echo esc_html( $dem_label ); ?></strong></div>
+            <?php endif; ?>
+            <div class="shortage-link"><a href="<?php echo esc_url( $jsa_url ); ?>" target="_blank" rel="noopener">Ver datos en Jobs and Skills Atlas →</a></div>
+          </div>
+          <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
       </div>
       <?php endif; ?>
 
@@ -753,8 +813,24 @@ function viva_rest_analyze( WP_REST_Request $req ) {
     }
 
     // Decodificar secuencias \uXXXX que la IA inserta como texto literal dentro de los strings.
-    // Esto ocurre cuando el modelo devuelve \\u00e9 (doble-escapado) en lugar de é directamente.
     $result = viva_decode_unicode_in_array( $result );
+
+    // Enriquecer con datos de escasez OSL 2025 por cada código ANZSCO devuelto
+    $anzsco_list = $result['anzsco'] ?? [];
+    if ( is_array( $anzsco_list ) && ! empty( $anzsco_list ) ) {
+        $shortage_map = [];
+        foreach ( $anzsco_list as $az ) {
+            $code = $az['code'] ?? '';
+            if ( ! $code ) continue;
+            $osl = viva_get_shortage_data( $code );
+            if ( $osl ) {
+                $shortage_map[ $code ] = viva_build_shortage_summary( $osl );
+            }
+        }
+        if ( ! empty( $shortage_map ) ) {
+            $result['shortageMap'] = $shortage_map;
+        }
+    }
 
     $result['nom']      = sanitize_text_field( $req->get_param( 'nombre' )    ?? '' );
     $result['ape']      = sanitize_text_field( $req->get_param( 'apellido' )  ?? '' );
@@ -966,6 +1042,64 @@ function viva_ghl_request( $method, $path, $body = null ) {
     ];
     if ( $body !== null ) $args['body'] = wp_json_encode( $body );
     return $method === 'POST' ? wp_remote_post( GHL_BASE_URL . $path, $args ) : wp_remote_get( GHL_BASE_URL . $path, $args );
+}
+
+/**
+ * Obtiene datos de escasez del OSL 2025 para un código ANZSCO dado.
+ * Usa un transient para no leer el JSON en cada request.
+ */
+function viva_get_shortage_data( string $anzsco_code ) {
+    $osl_file = plugin_dir_path( __FILE__ ) . 'osl_shortage_2025.json';
+    if ( ! file_exists( $osl_file ) ) return null;
+
+    $cache_key = 'viva_osl_index';
+    $index     = get_transient( $cache_key );
+    if ( false === $index ) {
+        $raw   = file_get_contents( $osl_file );
+        $rows  = json_decode( $raw, true );
+        $index = [];
+        if ( is_array( $rows ) ) {
+            foreach ( $rows as $row ) {
+                if ( ! empty( $row['code'] ) ) $index[ $row['code'] ] = $row;
+            }
+        }
+        set_transient( $cache_key, $index, 12 * HOUR_IN_SECONDS );
+    }
+    return $index[ $anzsco_code ] ?? null;
+}
+
+/**
+ * Calcula demandLevel e información de shortage para incluir en el resultado.
+ */
+function viva_build_shortage_summary( array $osl ) {
+    $states = [ 'nsw', 'vic', 'qld', 'sa', 'wa', 'tas', 'nt', 'act' ];
+    $shortage_states = [];
+    foreach ( $states as $s ) {
+        if ( strtoupper( $osl[ $s ] ?? '' ) === 'S' ) $shortage_states[] = strtoupper( $s );
+    }
+    $count    = count( $shortage_states );
+    $national = strtoupper( $osl['national'] ?? 'NS' );
+    if     ( $count >= 7 )              $level = 'very_high';
+    elseif ( $count >= 4 )              $level = 'high';
+    elseif ( $count >= 2 )              $level = 'moderate';
+    elseif ( $count >= 1 )              $level = 'some';
+    else                                $level = 'none';
+    return [
+        'national'       => $national,
+        'byState'        => [
+            'NSW' => strtoupper( $osl['nsw'] ?? 'NS' ),
+            'VIC' => strtoupper( $osl['vic'] ?? 'NS' ),
+            'QLD' => strtoupper( $osl['qld'] ?? 'NS' ),
+            'SA'  => strtoupper( $osl['sa']  ?? 'NS' ),
+            'WA'  => strtoupper( $osl['wa']  ?? 'NS' ),
+            'TAS' => strtoupper( $osl['tas'] ?? 'NS' ),
+            'NT'  => strtoupper( $osl['nt']  ?? 'NS' ),
+            'ACT' => strtoupper( $osl['act'] ?? 'NS' ),
+        ],
+        'shortageStates' => $shortage_states,
+        'shortageCount'  => $count,
+        'demandLevel'    => $level,
+    ];
 }
 
 /**
@@ -1390,6 +1524,22 @@ function viva_preevm_shortcode( $atts ) {
   color:var(--orange);padding:4px 8px;border-radius:6px;font-weight:700;white-space:nowrap;}
 #viva-preevm-app .vp-az-name{font-size:14px;font-weight:600;margin-bottom:3px;}
 #viva-preevm-app .vp-az-note{font-size:12px;color:var(--gray);}
+/* SHORTAGE MAP */
+#viva-preevm-app .vp-shortage-wrap{margin-top:16px;border-top:1px solid rgba(255,255,255,.06);padding-top:16px}
+#viva-preevm-app .vp-shortage-title{font-size:12px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.7px;margin-bottom:12px}
+#viva-preevm-app .vp-shortage-occ{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:14px;margin-bottom:10px}
+#viva-preevm-app .vp-shortage-occ-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+#viva-preevm-app .vp-shortage-occ-name{font-size:13px;font-weight:600}
+#viva-preevm-app .vp-shortage-nat{font-size:11px;color:var(--gray);margin-left:auto}
+#viva-preevm-app .vp-shortage-states{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;margin-bottom:10px}
+#viva-preevm-app .vp-ss{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.04);border-radius:8px;padding:5px 9px;font-size:11px}
+#viva-preevm-app .vp-ss.s .vp-ss-code{color:#0FBE7C;font-weight:700}
+#viva-preevm-app .vp-ss.r .vp-ss-code{color:#60A5FA;font-weight:700}
+#viva-preevm-app .vp-ss.m .vp-ss-code{color:#F59E0B;font-weight:700}
+#viva-preevm-app .vp-ss.ns .vp-ss-code{color:var(--gray)}
+#viva-preevm-app .vp-ss-lbl{color:var(--gray);font-size:10px;flex:1;text-align:right}
+#viva-preevm-app .vp-shortage-demand{font-size:12px;color:rgba(255,255,255,.6);margin-bottom:8px}
+#viva-preevm-app .vp-shortage-jsa a{font-size:11px;color:var(--orange);text-decoration:none}
 /* VARIABLES */
 #viva-preevm-app .vp-vari{display:flex;align-items:flex-start;gap:12px;padding:14px;
   background:rgba(255,255,255,.03);border-radius:10px;margin-bottom:8px;}
@@ -1435,8 +1585,8 @@ function viva_preevm_shortcode( $atts ) {
   display:block;margin:20px auto 0;transition:all .2s;}
 #viva-preevm-app .vp-btn-reset:hover{border-color:rgba(255,255,255,.25);color:#fff;}
 /* CALENDAR IFRAME */
-#viva-preevm-app .vp-cal-wrap{margin-top:24px;border-radius:14px;overflow:hidden;}
-#viva-preevm-app .vp-cal-wrap iframe{width:100%;border:none;display:block;min-height:600px;}
+#viva-preevm-app .vp-cal-wrap{margin-top:24px;border-radius:14px;overflow:hidden;background:#fff;}
+#viva-preevm-app .vp-cal-wrap iframe{width:100%;border:none;display:block;min-height:700px;height:750px;transition:height .3s ease;}
 /* LEGAL */
 #viva-preevm-app .vp-legal{font-size:11px;color:rgba(255,255,255,.25);text-align:center;margin-top:20px;line-height:1.7;}
 /* GHL GREETING */
@@ -1467,7 +1617,7 @@ function viva_preevm_shortcode( $atts ) {
   #viva-preevm-app .vp-sline{width:28px;}
   #viva-preevm-app .vp-sl{font-size:8px;}
   #viva-preevm-app .vp-desglose table{font-size:12px;}
-  #viva-preevm-app .vp-cal-wrap iframe{min-height:450px;}
+  #viva-preevm-app .vp-cal-wrap iframe{min-height:600px;height:680px;}
 }
 </style>
 
@@ -1757,13 +1907,13 @@ function viva_preevm_shortcode( $atts ) {
     <h3>&#x1F4C5; Valida tu resultado con un experto</h3>
     <p>Nuestro an&aacute;lisis de IA es orientativo. Un asesor migratorio registrado (MARA 0101111) revisar&aacute; tu perfil en detalle y te confirmar&aacute; si efectivamente puedes avanzar.<br><strong>Esta asesor&iacute;a es GRATUITA y sin compromiso.</strong></p>
     <div class="vp-cta-btns">
-      <a class="vp-btn-cta" href="https://crm.vivaaustralia.com.au/widget/booking/jIZFnPViS594ZfTzVfHS" target="_blank">&#x1F4C5; Agendar asesor&iacute;a gratuita &rarr;</a>
+      <button class="vp-btn-cta" onclick="vpScrollToCalendar()">&#x1F4C5; Agendar asesor&iacute;a gratuita &rarr;</button>
       <button class="vp-btn-sec" onclick="vpGeneratePDF()">&#x1F4C4; Descargar informe PDF</button>
     </div>
   </div>
   <!-- Calendario GHL -->
-  <div class="vp-cal-wrap">
-    <iframe src="https://crm.vivaaustralia.com.au/widget/booking/jIZFnPViS594ZfTzVfHS" scrolling="no"></iframe>
+  <div class="vp-cal-wrap" id="vpCalWrap">
+    <iframe id="vpCalIframe" src="https://crm.vivaaustralia.com.au/widget/booking/jIZFnPViS594ZfTzVfHS" scrolling="yes" allowtransparency="true"></iframe>
   </div>
   <div class="vp-legal">Informe preliminar de car&aacute;cter orientativo. No constituye asesoramiento migratorio formal bajo la Migration Act 1958 (Cth). Viva Australia Internacional &middot; Frank Cross, Senior Migration Agent &middot; MARA 0101111</div>
   <button class="vp-btn-reset" onclick="vpReset()">&#x2190; Analizar otro perfil</button>
@@ -2191,48 +2341,52 @@ function vpContinueLater(){
     expAU:vpData.expAU||'', estudioRegional:vpData.estudioRegional||''
   };
 
-  // Primero upsert en GHL
-  var customFields=[
-    {key:'preevm_score',field_value:'0'},
-    {key:'preevm_viability',field_value:'pendiente'},
-    {key:'preevm_decision',field_value:String(vpData.decision||0)}
-  ];
-  vpApi('ghl-upsert',{
+  // GHL upsert + save-draft en paralelo; actualizamos continue_link cuando AMBOS terminan
+  var p_ghl_draft = vpApi('ghl-upsert',{
     email:vpData.email, firstName:vpData.nombre, lastName:vpData.apellido,
-    phone:vpData.whatsapp, country:vpData.pais, customFields:customFields
-  }).then(function(res){
-    if(res.contactId){
-      vpData.contactId=res.contactId;
-      // Agregar tags
-      vpApi('ghl-tag',{contactId:res.contactId,tags:['test-preevm','cv-pendiente']});
-    }
+    phone:vpData.whatsapp, country:vpData.pais,
+    customFields:[
+      {key:'preevm_score',     field_value:'0'},
+      {key:'preevm_viability', field_value:'pendiente'},
+      {key:'preevm_decision',  field_value:String(vpData.decision||0)}
+    ]
   });
+  var p_draft = vpApi('save-draft', draftData, true);
 
-  // Guardar draft y obtener URL de continuación
-  vpApi('save-draft', draftData, true).then(function(res){
-    if(res.continueUrl){
-      // Actualizar custom field en GHL con el link
-      if(vpData.contactId){
-        vpApi('ghl-upsert',{email:vpData.email,customFields:[{key:'preevm_continue_link',field_value:res.continueUrl}]});
-        // Nota en GHL
-        var fecha=new Date().toLocaleString('es-CO',{timeZone:'America/Bogota'});
-        var nota='📋 TEST PRE-EVM — CV Pendiente — '+fecha+'\n';
-        nota+='━━━━━━━━━━━━━━━━━━━━━━━\n';
-        nota+='Quiz completado: ✅\nCV adjunto: ❌ Pendiente\nAnálisis: ⏳ En espera del CV\n';
-        nota+='━━━━━━━━━━━━━━━━━━━━━━━\n';
-        nota+='Profesión: '+(vpData.profesion||'-')+' | Edad: '+(vpData.edad||'-')+'\n';
-        nota+='Inglés: '+(vpData.ingles||'-')+' | Experiencia: '+(vpData.experiencia||'-')+'\n';
-        nota+='País: '+(vpData.pais||'-')+'\n';
-        nota+='━━━━━━━━━━━━━━━━━━━━━━━\n';
-        nota+='Intención: '+(vpData.decision||'-')+'/5 | Plazo: '+(vpData.plazo||'-')+'\n';
-        nota+='Inversión: '+(vpData.inversion||'-')+'\n';
-        nota+='━━━━━━━━━━━━━━━━━━━━━━━\n';
-        nota+='🔗 Link para completar: '+res.continueUrl+'\n';
-        nota+='⚡ Tag cv-pendiente activado → workflow de seguimiento';
-        vpApi('ghl-note',{contactId:vpData.contactId,body:nota});
-      }
+  Promise.all([p_ghl_draft, p_draft]).then(function(results){
+    var ghlRes   = results[0];
+    var draftRes = results[1];
+    var contactId = (ghlRes && ghlRes.contactId) ? ghlRes.contactId : (vpData.contactId||'');
+    if(contactId) vpData.contactId = contactId;
+
+    // Tags
+    if(contactId) vpApi('ghl-tag',{contactId:contactId,tags:['test-preevm','cv-pendiente']});
+
+    // Actualizar custom fields con el link de continuación
+    if(draftRes && draftRes.continueUrl && contactId){
+      vpApi('ghl-upsert',{
+        email:vpData.email,
+        firstName:vpData.nombre, lastName:vpData.apellido,
+        customFields:[{key:'preevm_continue_link',field_value:draftRes.continueUrl}]
+      });
+      // Nota en GHL
+      var fecha=new Date().toLocaleString('es-CO',{timeZone:'America/Bogota'});
+      var nota='📋 TEST PRE-EVM — CV Pendiente — '+fecha+'\n';
+      nota+='━━━━━━━━━━━━━━━━━━━━━━━\n';
+      nota+='Quiz completado: ✅\nCV adjunto: ❌ Pendiente\nAnálisis: ⏳ En espera del CV\n';
+      nota+='━━━━━━━━━━━━━━━━━━━━━━━\n';
+      nota+='Profesión: '+(vpData.profesion||'-')+' | Edad: '+(vpData.edad||'-')+'\n';
+      nota+='Inglés: '+(vpData.ingles||'-')+' | Experiencia: '+(vpData.experiencia||'-')+'\n';
+      nota+='País: '+(vpData.pais||'-')+'\n';
+      nota+='━━━━━━━━━━━━━━━━━━━━━━━\n';
+      nota+='Intención: '+(vpData.decision||'-')+'/5 | Plazo: '+(vpData.plazo||'-')+'\n';
+      nota+='Inversión: '+(vpData.inversion||'-')+'\n';
+      nota+='━━━━━━━━━━━━━━━━━━━━━━━\n';
+      nota+='🔗 Link para completar: '+draftRes.continueUrl+'\n';
+      nota+='⚡ Tag cv-pendiente activado → workflow de seguimiento';
+      vpApi('ghl-note',{contactId:contactId,body:nota});
     }
-  });
+  }).catch(function(e){ console.warn('[VIVA GHL] Error en continuar después:', e); });
 
   // Mostrar confirmación
   document.getElementById('vpConfirmNombre').textContent=vpData.nombre||'';
@@ -2318,38 +2472,44 @@ function vpPostAnalysis(result){
   else if(dec<=2)tags.push('lead-frio');
   if(vpData.inversion==='si')tags.push('capacidad-inversion');
 
-  // Upsert GHL con datos de resultado
-  vpApi('ghl-upsert',{
+  // GHL upsert + save-result en paralelo; actualizamos result_link cuando AMBOS terminan
+  var p_ghl_result = vpApi('ghl-upsert',{
     email:vpData.email, firstName:vpData.nombre, lastName:vpData.apellido,
     phone:vpData.whatsapp, country:vpData.pais,
     customFields:[
-      {key:'preevm_score',field_value:String(result.pts||0)},
-      {key:'preevm_viability',field_value:viability},
-      {key:'preevm_decision',field_value:String(vpData.decision||0)}
+      {key:'preevm_score',     field_value:String(result.pts||0)},
+      {key:'preevm_viability', field_value:viability},
+      {key:'preevm_decision',  field_value:String(vpData.decision||0)}
     ]
-  }).then(function(res){
-    if(res.contactId){vpData.contactId=res.contactId;}
   });
-
-  // Guardar resultado en WordPress CPT
-  vpApi('save-result',{
+  var p_save_result = vpApi('save-result',{
     nombre:vpData.nombre, apellido:vpData.apellido, email:vpData.email,
     whatsapp:vpData.whatsapp, pais:vpData.pais, profesion:vpData.profesion,
     edad:vpData.edad, ingles:vpData.ingles, experiencia:vpData.experiencia,
     contactId:vpData.contactId||'', result:result
-  },true).then(function(res){
-    if(res.resultUrl){
-      vpResultUrl=res.resultUrl;
-      result.resultUrl=res.resultUrl;
-      // Actualizar GHL con link al resultado
-      if(vpData.contactId){
-        vpApi('ghl-upsert',{email:vpData.email,customFields:[{key:'preevm_result_link',field_value:res.resultUrl}]});
+  },true);
+
+  Promise.all([p_ghl_result, p_save_result]).then(function(results){
+    var ghlRes  = results[0];
+    var saveRes = results[1];
+    var contactId = (ghlRes && ghlRes.contactId) ? ghlRes.contactId : (vpData.contactId||'');
+    if(contactId) vpData.contactId = contactId;
+
+    if(saveRes && saveRes.resultUrl){
+      vpResultUrl = saveRes.resultUrl;
+      result.resultUrl = saveRes.resultUrl;
+      // Actualizar custom field result_link en GHL — ahora con contactId garantizado
+      if(contactId){
+        vpApi('ghl-upsert',{
+          email:vpData.email, firstName:vpData.nombre, lastName:vpData.apellido,
+          customFields:[{key:'preevm_result_link',field_value:saveRes.resultUrl}]
+        });
       }
     }
     // Tags
-    if(vpData.contactId) vpApi('ghl-tag',{contactId:vpData.contactId,tags:tags});
+    if(contactId) vpApi('ghl-tag',{contactId:contactId,tags:tags});
     // Nota GHL
-    if(vpData.contactId){
+    if(contactId){
       var az=(result.anzsco||[])[0]||{};
       var visaStr=(result.visas||[]).join(', ');
       var viLabel=viability==='apto'?'Indicadores positivos':viability==='parcial'?'Parcial':'Áreas de mejora';
@@ -2368,15 +2528,15 @@ function vpPostAnalysis(result){
       nota+='Intención: '+(vpData.decision||'-')+'/5 | Plazo: '+(vpData.plazo||'-')+'\n';
       nota+='Inversión: '+(vpData.inversion||'-')+'\n';
       nota+='━━━━━━━━━━━━━━━━━━━━━━━\n';
-      if(res.resultUrl) nota+='🔗 Ver informe completo: '+res.resultUrl+'\n';
-      vpApi('ghl-note',{contactId:vpData.contactId,body:nota});
+      if(saveRes && saveRes.resultUrl) nota+='🔗 Ver informe completo: '+saveRes.resultUrl+'\n';
+      vpApi('ghl-note',{contactId:contactId,body:nota});
     }
 
     // Mostrar resultado
     if(viability==='no-apto'){vpShowNoApto(result);}
     else{vpShowResult(result);}
   }).catch(function(){
-    // Si falla save-result, mostrar igual
+    // Si falla, mostrar resultado igual
     if(viability==='no-apto'){vpShowNoApto(result);}
     else{vpShowResult(result);}
   });
@@ -2423,6 +2583,8 @@ function vpShowResult(d){
   (d.anzsco||[]).forEach(function(a){
     az.innerHTML+='<div class="vp-az"><span class="vp-az-code">'+a.code+'</span><div><div class="vp-az-name">'+a.name+'</div><div class="vp-az-note">'+(a.note||'')+'</div></div></div>';
   });
+  // Shortage map por ocupación
+  vpRenderShortageMap(d,'vpRAnzsco');
 
   var vv=document.getElementById('vpRVars'); vv.innerHTML='';
   (d.variables||[]).forEach(function(v){
@@ -2723,6 +2885,79 @@ window.vpContinueLater=vpContinueLater;
 window.vpLaunchAnalysis=vpLaunchAnalysis;
 window.vpGeneratePDF=vpGeneratePDF;
 window.vpReset=vpReset;
+window.vpScrollToCalendar=vpScrollToCalendar;
+
+// ── Mapa de escasez por estado ───────────────────────────────
+function vpRenderShortageMap(d, containerId){
+  var container=document.getElementById(containerId);
+  if(!container) return;
+  var smap=d.shortageMap;
+  if(!smap || !Object.keys(smap).length) return;
+
+  var STATES=['NSW','VIC','QLD','SA','WA','TAS','NT','ACT'];
+  var RATING_ICO={S:'🟢',R:'🔵',M:'🟡',NS:'⚪'};
+  var RATING_LBL={S:'Escasez',R:'Regional',M:'Metrópolis',NS:'Sin escasez'};
+  var DEMAND_LBL={very_high:'Escasez en casi todo el país',high:'Escasez en la mayoría de estados',moderate:'Escasez en algunos estados',some:'Escasez puntual',none:'Sin escasez detectada'};
+
+  var html='<div class="vp-shortage-wrap"><div class="vp-shortage-title">🗺️ Demanda laboral por estado (OSL 2025)</div>';
+
+  Object.keys(smap).forEach(function(code){
+    var sh=smap[code];
+    // Buscar nombre del código en d.anzsco
+    var azName='';
+    (d.anzsco||[]).forEach(function(a){ if(a.code===code) azName=a.name; });
+
+    var natIco=RATING_ICO[sh.national]||'⚪';
+    var natLbl=RATING_LBL[sh.national]||sh.national;
+    var demLbl=DEMAND_LBL[sh.demandLevel]||'';
+    var jsaUrl='https://www.jobsandskills.gov.au/jobs-and-skills-atlas/occupation?occupationFocus='+code.substring(0,4);
+
+    html+='<div class="vp-shortage-occ">';
+    html+='<div class="vp-shortage-occ-h">';
+    html+='<span class="vp-az-code">'+code+'</span>';
+    if(azName) html+='<span class="vp-shortage-occ-name">'+azName+'</span>';
+    html+='<span class="vp-shortage-nat">'+natIco+' Nacional: '+natLbl+'</span>';
+    html+='</div>';
+
+    html+='<div class="vp-shortage-states">';
+    STATES.forEach(function(s){
+      var r=(sh.byState&&sh.byState[s])||'NS';
+      var ico=RATING_ICO[r]||'⚪';
+      var lbl=RATING_LBL[r]||r;
+      html+='<div class="vp-ss '+r.toLowerCase()+'"><span>'+ico+'</span><span class="vp-ss-code">'+s+'</span><span class="vp-ss-lbl">'+lbl+'</span></div>';
+    });
+    html+='</div>';
+
+    if(demLbl) html+='<div class="vp-shortage-demand">📊 '+demLbl+'</div>';
+    html+='<div class="vp-shortage-jsa"><a href="'+jsaUrl+'" target="_blank" rel="noopener">Ver en Jobs and Skills Atlas →</a></div>';
+    html+='</div>';
+  });
+
+  html+='</div>';
+  container.insertAdjacentHTML('beforeend', html);
+}
+
+// ── Scroll al calendario y auto-resize ───────────────────────────────────────
+function vpScrollToCalendar(){
+  var wrap=document.getElementById('vpCalWrap');
+  if(wrap) wrap.scrollIntoView({behavior:'smooth',block:'start'});
+}
+// Auto-resize del iframe del calendario via postMessage
+window.addEventListener('message',function(e){
+  if(!e.data) return;
+  var d=e.data;
+  // GHL / Cal.com / Calendly envían height en el mensaje
+  var h=0;
+  if(typeof d==='object' && d.height)  h=parseInt(d.height);
+  if(typeof d==='object' && d.iFrameHeight) h=parseInt(d.iFrameHeight);
+  if(typeof d==='string'){
+    try{ var p=JSON.parse(d); if(p.height) h=parseInt(p.height); }catch(x){}
+  }
+  if(h>400){
+    var iframe=document.getElementById('vpCalIframe');
+    if(iframe) iframe.style.height=(h+40)+'px';
+  }
+});
 
 })();
 </script>
