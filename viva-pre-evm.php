@@ -356,6 +356,8 @@ function viva_preevm_result_content( $content ) {
     if ( empty( $json ) ) return $content;
     $r    = json_decode( $json, true );
     if ( ! $r ) return $content;
+    // Sanear secuencias \uXXXX que wp_unslash pudo haber dañado en resultados anteriores
+    $r    = viva_decode_unicode_in_array( $r );
     $r['nom']  = esc_html( get_post_meta( $pid, '_preevm_nombre',   true ) );
     $r['ape']  = esc_html( get_post_meta( $pid, '_preevm_apellido', true ) );
     $r['pais'] = esc_html( get_post_meta( $pid, '_preevm_pais',     true ) );
@@ -990,7 +992,9 @@ function viva_rest_save_result( WP_REST_Request $req ) {
         '_preevm_puntaje'            => absint( $result['pts']     ?? 0 ),
         '_preevm_viabilidad_pct'     => absint( $result['viaPct']  ?? 0 ),
         '_preevm_competitividad_pct' => absint( $result['compPct'] ?? 0 ),
-        '_preevm_resultado_json'     => wp_json_encode( $result ),
+        // JSON_UNESCAPED_UNICODE evita que update_post_meta (wp_unslash) rompa
+        // las secuencias \uXXXX convirtiéndolas en uXXXX sin backslash.
+        '_preevm_resultado_json'     => wp_json_encode( $result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ),
         '_preevm_contacto_ghl'       => sanitize_text_field( $data['contactId']  ?? '' ),
         '_preevm_timestamp'          => current_time( 'mysql' ),
     ];
@@ -1115,24 +1119,17 @@ function viva_decode_unicode_in_array( $data ) {
     if ( ! is_string( $data ) ) {
         return $data;
     }
-    // Envolver en comillas y decodificar como si fuera un string JSON
-    // Esto convierte \u00e9 → é y pares surrogados → emoji correctamente
-    $encoded = json_encode( $data ); // convierte é→\u00e9 si ya es UTF-8, lo dejamos como string JSON
-    // Reemplazar secuencias \uXXXX literales (doble-escapadas: \\u00e9 en el JSON original)
-    // que quedaron como \u00e9 en la cadena PHP tras json_decode
-    $decoded = preg_replace_callback(
-        '/\\\\u([0-9a-fA-F]{4})/',
+    // Convierte secuencias \uXXXX literales (con backslash real) a UTF-8.
+    // json_decode maneja correctamente pares surrogados (emoji, etc.).
+    // El flag /i acepta \uD83C y \uD83c por igual.
+    return preg_replace_callback(
+        '/\\\\u([0-9a-fA-F]{4})/i',
         function ( $m ) {
-            $cp = hexdec( $m[1] );
-            // Convertir code point a UTF-8
-            if ( $cp < 0x80 )   return chr( $cp );
-            if ( $cp < 0x800 )  return chr( 0xC0 | ( $cp >> 6 ) ) . chr( 0x80 | ( $cp & 0x3F ) );
-            if ( $cp < 0x10000 ) return chr( 0xE0 | ( $cp >> 12 ) ) . chr( 0x80 | ( ( $cp >> 6 ) & 0x3F ) ) . chr( 0x80 | ( $cp & 0x3F ) );
-            return $m[0]; // fuera de BMP — dejar como está
+            $char = json_decode( '"\\u' . $m[1] . '"' );
+            return $char !== null ? $char : $m[0];
         },
         $data
     );
-    return $decoded;
 }
 
 function viva_check_rate_limit( $ip ) {
