@@ -2445,8 +2445,30 @@ function vpContinueLater(){
     expAU:vpData.expAU||'', estudioRegional:vpData.estudioRegional||''
   };
 
-  // GHL upsert + save-draft en paralelo; actualizamos continue_link cuando AMBOS terminan
-  var p_ghl_draft = vpApi('ghl-upsert',{
+  // ── 1) save-draft: independiente de GHL ─────────────────────
+  // El continue_link se envía en cuanto WP genera el token,
+  // sin esperar ni depender del resultado de GHL.
+  vpApi('save-draft', draftData, true).then(function(draftRes){
+    if(!draftRes || !draftRes.continueUrl){ console.warn('[VIVA] save-draft no devolvió continueUrl'); return; }
+    console.log('[VIVA] continueUrl generada:', draftRes.continueUrl);
+    // Enviar continue_link a GHL (upsert por email)
+    vpApi('ghl-upsert',{
+      email:vpData.email, firstName:vpData.nombre, lastName:vpData.apellido,
+      customFields:[{key:'preevm_continue_link', field_value:draftRes.continueUrl}]
+    }).then(function(r){ console.log('[VIVA GHL] preevm_continue_link guardado →', r); })
+      .catch(function(e){ console.error('[VIVA GHL] Error en continue_link upsert:', e); });
+    // Nota en GHL (no bloqueante)
+    vpApi('ghl-note',{contactId:vpData.contactId||'',body:
+      '📋 TEST PRE-EVM — CV Pendiente\n'+
+      'Profesión: '+(vpData.profesion||'-')+' | Edad: '+(vpData.edad||'-')+'\n'+
+      'Inglés: '+(vpData.ingles||'-')+' | País: '+(vpData.pais||'-')+'\n'+
+      'Intención: '+(vpData.decision||'-')+'/5 | Inversión: '+(vpData.inversion||'-')+'\n'+
+      '🔗 Continuar: '+draftRes.continueUrl
+    }).catch(function(){});
+  }).catch(function(e){ console.error('[VIVA] Error en save-draft:', e); });
+
+  // ── 2) GHL upsert básico (score/viability/decision) ──────────
+  vpApi('ghl-upsert',{
     email:vpData.email, firstName:vpData.nombre, lastName:vpData.apellido,
     phone:vpData.whatsapp, country:vpData.pais,
     customFields:[
@@ -2454,46 +2476,11 @@ function vpContinueLater(){
       {key:'preevm_viability', field_value:'pendiente'},
       {key:'preevm_decision',  field_value:String(vpData.decision||0)}
     ]
-  });
-  var p_draft = vpApi('save-draft', draftData, true);
-
-  Promise.all([p_ghl_draft, p_draft]).then(function(results){
-    var ghlRes   = results[0];
-    var draftRes = results[1];
-    var contactId = (ghlRes && ghlRes.contactId) ? ghlRes.contactId : (vpData.contactId||'');
-    if(contactId) vpData.contactId = contactId;
-    console.log('[VIVA GHL] vpContinueLater — contactId:', contactId, '| continueUrl:', draftRes&&draftRes.continueUrl);
-
-    // Tags
-    if(contactId) vpApi('ghl-tag',{contactId:contactId,tags:['test-preevm','cv-pendiente']});
-
-    // Actualizar continue_link — no requiere contactId, basta el email para el upsert
-    if(draftRes && draftRes.continueUrl){
-      console.log('[VIVA GHL] Enviando preevm_continue_link →', draftRes.continueUrl);
-      vpApi('ghl-upsert',{
-        email:vpData.email,
-        firstName:vpData.nombre, lastName:vpData.apellido,
-        customFields:[{key:'preevm_continue_link',field_value:draftRes.continueUrl}]
-      }).then(function(r){ console.log('[VIVA GHL] continue_link guardado, respuesta:', r); })
-        .catch(function(e){ console.error('[VIVA GHL] Error guardando continue_link:', e); });
-      // Nota en GHL
-      var fecha=new Date().toLocaleString('es-CO',{timeZone:'America/Bogota'});
-      var nota='📋 TEST PRE-EVM — CV Pendiente — '+fecha+'\n';
-      nota+='━━━━━━━━━━━━━━━━━━━━━━━\n';
-      nota+='Quiz completado: ✅\nCV adjunto: ❌ Pendiente\nAnálisis: ⏳ En espera del CV\n';
-      nota+='━━━━━━━━━━━━━━━━━━━━━━━\n';
-      nota+='Profesión: '+(vpData.profesion||'-')+' | Edad: '+(vpData.edad||'-')+'\n';
-      nota+='Inglés: '+(vpData.ingles||'-')+' | Experiencia: '+(vpData.experiencia||'-')+'\n';
-      nota+='País: '+(vpData.pais||'-')+'\n';
-      nota+='━━━━━━━━━━━━━━━━━━━━━━━\n';
-      nota+='Intención: '+(vpData.decision||'-')+'/5 | Plazo: '+(vpData.plazo||'-')+'\n';
-      nota+='Inversión: '+(vpData.inversion||'-')+'\n';
-      nota+='━━━━━━━━━━━━━━━━━━━━━━━\n';
-      nota+='🔗 Link para completar: '+draftRes.continueUrl+'\n';
-      nota+='⚡ Tag cv-pendiente activado → workflow de seguimiento';
-      vpApi('ghl-note',{contactId:contactId,body:nota});
-    }
-  }).catch(function(e){ console.warn('[VIVA GHL] Error en continuar después:', e); });
+  }).then(function(r){
+    var cid=(r&&r.contactId)?r.contactId:(vpData.contactId||'');
+    if(cid){ vpData.contactId=cid; vpApi('ghl-tag',{contactId:cid,tags:['test-preevm','cv-pendiente']}).catch(function(){}); }
+    console.log('[VIVA GHL] Upsert básico OK, contactId:', cid);
+  }).catch(function(e){ console.warn('[VIVA GHL] Upsert básico falló (no bloquea el flujo):', e); });
 
   // Mostrar confirmación
   document.getElementById('vpConfirmNombre').textContent=vpData.nombre||'';
@@ -2579,8 +2566,38 @@ function vpPostAnalysis(result){
   else if(dec<=2)tags.push('lead-frio');
   if(vpData.inversion==='si')tags.push('capacidad-inversion');
 
-  // GHL upsert + save-result en paralelo; actualizamos result_link cuando AMBOS terminan
-  var p_ghl_result = vpApi('ghl-upsert',{
+  // ── 1) save-result: independiente de GHL ────────────────────
+  // El result_link se envía en cuanto WP guarda el CPT,
+  // sin esperar ni depender del resultado de GHL.
+  vpApi('save-result',{
+    nombre:vpData.nombre, apellido:vpData.apellido, email:vpData.email,
+    whatsapp:vpData.whatsapp, pais:vpData.pais, profesion:vpData.profesion,
+    edad:vpData.edad, ingles:vpData.ingles, experiencia:vpData.experiencia,
+    contactId:vpData.contactId||'', result:result
+  },true).then(function(saveRes){
+    if(saveRes && saveRes.resultUrl){
+      vpResultUrl = saveRes.resultUrl;
+      result.resultUrl = saveRes.resultUrl;
+      console.log('[VIVA] resultUrl generada:', saveRes.resultUrl);
+      // Enviar result_link a GHL (upsert por email)
+      vpApi('ghl-upsert',{
+        email:vpData.email, firstName:vpData.nombre, lastName:vpData.apellido,
+        customFields:[{key:'preevm_result_link', field_value:saveRes.resultUrl}]
+      }).then(function(r){ console.log('[VIVA GHL] preevm_result_link guardado →', r); })
+        .catch(function(e){ console.error('[VIVA GHL] Error en result_link upsert:', e); });
+    }
+    // Mostrar resultado (siempre, con o sin URL)
+    if(viability==='no-apto'){vpShowNoApto(result);}
+    else{vpShowResult(result);}
+  }).catch(function(e){
+    console.error('[VIVA] Error en save-result:', e);
+    // Mostrar resultado de todas formas
+    if(viability==='no-apto'){vpShowNoApto(result);}
+    else{vpShowResult(result);}
+  });
+
+  // ── 2) GHL upsert básico + tags + nota (independiente de save-result) ──
+  vpApi('ghl-upsert',{
     email:vpData.email, firstName:vpData.nombre, lastName:vpData.apellido,
     phone:vpData.whatsapp, country:vpData.pais,
     customFields:[
@@ -2588,66 +2605,24 @@ function vpPostAnalysis(result){
       {key:'preevm_viability', field_value:viability},
       {key:'preevm_decision',  field_value:String(vpData.decision||0)}
     ]
-  });
-  var p_save_result = vpApi('save-result',{
-    nombre:vpData.nombre, apellido:vpData.apellido, email:vpData.email,
-    whatsapp:vpData.whatsapp, pais:vpData.pais, profesion:vpData.profesion,
-    edad:vpData.edad, ingles:vpData.ingles, experiencia:vpData.experiencia,
-    contactId:vpData.contactId||'', result:result
-  },true);
-
-  Promise.all([p_ghl_result, p_save_result]).then(function(results){
-    var ghlRes  = results[0];
-    var saveRes = results[1];
-    var contactId = (ghlRes && ghlRes.contactId) ? ghlRes.contactId : (vpData.contactId||'');
-    if(contactId) vpData.contactId = contactId;
-    console.log('[VIVA GHL] vpPostAnalysis — contactId:', contactId, '| resultUrl:', saveRes&&saveRes.resultUrl);
-
-    if(saveRes && saveRes.resultUrl){
-      vpResultUrl = saveRes.resultUrl;
-      result.resultUrl = saveRes.resultUrl;
-      // Actualizar result_link — no requiere contactId, basta el email para el upsert
-      console.log('[VIVA GHL] Enviando preevm_result_link →', saveRes.resultUrl);
-      vpApi('ghl-upsert',{
-        email:vpData.email, firstName:vpData.nombre, lastName:vpData.apellido,
-        customFields:[{key:'preevm_result_link',field_value:saveRes.resultUrl}]
-      }).then(function(r){ console.log('[VIVA GHL] result_link guardado, respuesta:', r); })
-        .catch(function(e){ console.error('[VIVA GHL] Error guardando result_link:', e); });
-    }
-    // Tags
-    if(contactId) vpApi('ghl-tag',{contactId:contactId,tags:tags});
-    // Nota GHL
+  }).then(function(ghlRes){
+    var contactId=(ghlRes&&ghlRes.contactId)?ghlRes.contactId:(vpData.contactId||'');
+    if(contactId) vpData.contactId=contactId;
+    console.log('[VIVA GHL] Upsert básico OK, contactId:', contactId);
+    if(contactId) vpApi('ghl-tag',{contactId:contactId,tags:tags}).catch(function(){});
     if(contactId){
       var az=(result.anzsco||[])[0]||{};
-      var visaStr=(result.visas||[]).join(', ');
       var viLabel=viability==='apto'?'Indicadores positivos':viability==='parcial'?'Parcial':'Áreas de mejora';
-      var fecha=new Date().toLocaleString('es-CO',{timeZone:'America/Bogota'});
-      var nota='📊 RESULTADO PRE-EVM — '+fecha+'\n';
-      nota+='━━━━━━━━━━━━━━━━━━━━━━━\n';
-      nota+='Puntaje estimado: '+(result.pts||0)+'/120 pts\n';
-      nota+='Viabilidad: '+(result.viaPct||0)+'%\n';
-      nota+='Competitividad: '+(result.compPct||0)+'%\n';
-      nota+='Resultado: '+viLabel+'\n';
-      nota+='Visas identificadas: '+visaStr+'\n';
-      nota+='━━━━━━━━━━━━━━━━━━━━━━━\n';
-      nota+='Profesión: '+(vpData.profesion||'-')+'\n';
-      if(az.code) nota+='ANZSCO: '+az.code+' — '+az.name+'\n';
-      nota+='━━━━━━━━━━━━━━━━━━━━━━━\n';
-      nota+='Intención: '+(vpData.decision||'-')+'/5 | Plazo: '+(vpData.plazo||'-')+'\n';
-      nota+='Inversión: '+(vpData.inversion||'-')+'\n';
-      nota+='━━━━━━━━━━━━━━━━━━━━━━━\n';
-      if(saveRes && saveRes.resultUrl) nota+='🔗 Ver informe completo: '+saveRes.resultUrl+'\n';
-      vpApi('ghl-note',{contactId:contactId,body:nota});
+      var nota='📊 RESULTADO PRE-EVM\n'+
+        'Puntaje: '+(result.pts||0)+' pts | Viabilidad: '+(result.viaPct||0)+'% | '+viLabel+'\n'+
+        'Visas: '+(result.visas||[]).join(', ')+'\n'+
+        (az.code?'ANZSCO: '+az.code+' — '+az.name+'\n':'')+
+        'Profesión: '+(vpData.profesion||'-')+' | País: '+(vpData.pais||'-')+'\n'+
+        'Intención: '+(vpData.decision||'-')+'/5 | Inversión: '+(vpData.inversion||'-')+'\n'+
+        (vpResultUrl?'🔗 Informe: '+vpResultUrl+'\n':'');
+      vpApi('ghl-note',{contactId:contactId,body:nota}).catch(function(){});
     }
-
-    // Mostrar resultado
-    if(viability==='no-apto'){vpShowNoApto(result);}
-    else{vpShowResult(result);}
-  }).catch(function(){
-    // Si falla, mostrar resultado igual
-    if(viability==='no-apto'){vpShowNoApto(result);}
-    else{vpShowResult(result);}
-  });
+  }).catch(function(e){ console.warn('[VIVA GHL] Upsert básico falló (no bloquea el flujo):', e); });
 }
 
 // ══════════════════════════════════════════════════════
