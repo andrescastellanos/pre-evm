@@ -1656,7 +1656,7 @@ function viva_preevm_shortcode( $atts ) {
 
 <!-- ═══ PASO 1: EMAIL ═══ -->
 <div class="vp-card" data-screen="s1">
-  <div class="vp-card-title">&#x1F30F; &iquest;Desde d&oacute;nde nos escrib&iacute;s?</div>
+  <div class="vp-card-title">&#x1F30F; &iquest;Desde d&oacute;nde nos escribes?</div>
   <div class="vp-card-sub">Empezamos por tu email &mdash; es todo lo que necesitamos por ahora.</div>
   <div class="vp-row one">
     <div class="vp-fld">
