@@ -13,21 +13,21 @@ jobs:
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 2  # necesario para git-ftp (diff con commit anterior)
 
-      - name: Deploy con git-ftp
+      - name: Deploy con FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: vivaaustralia.com.au
+          # IP directa de Hostinger — evita que Cloudflare bloquee el puerto 21
+          server: 82.29.154.253
           username: u905238757.vivaaustralia.com.au
           password: ${{ secrets.FTP_PASSWORD }}
           port: 21
+          # ftps con security:loose omite validación del cert (necesario con IP directa)
           protocol: ftps
           security: loose
           server-dir: /wp-content/plugins/viva-pre-evm/
           local-dir: ./
-          timeout: 60000
+          timeout: 120000
           exclude: |
             **/.git*
             **/.git*/**
