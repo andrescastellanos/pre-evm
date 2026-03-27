@@ -894,8 +894,8 @@ function viva_rest_ghl_assignee( WP_REST_Request $req ) {
     $ucode = (int) wp_remote_retrieve_response_code( $uresp );
     if ( $ucode !== 200 ) return [ 'phone' => '' ];
     $user  = json_decode( wp_remote_retrieve_body( $uresp ), true );
-    // GHL devuelve el teléfono en 'phone' o 'phoneNumber' según la versión
-    $phone = $user['phone'] ?? $user['phoneNumber'] ?? $user['cellPhone'] ?? '';
+    // {{user.phone_raw}} en GHL templates = campo 'phone_raw' en la API
+    $phone = $user['phone_raw'] ?? $user['phone'] ?? $user['phoneNumber'] ?? $user['cellPhone'] ?? '';
     return [ 'phone' => $phone, 'name' => trim( ( $user['firstName'] ?? '' ) . ' ' . ( $user['lastName'] ?? '' ) ) ];
 }
 
