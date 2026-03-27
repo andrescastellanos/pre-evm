@@ -1608,6 +1608,16 @@ function viva_preevm_shortcode( $atts ) {
 #viva-preevm-app .ls.active{background:rgba(232,96,10,.08);border-color:rgba(232,96,10,.2);color:rgba(255,255,255,.9);}
 #viva-preevm-app .ls.done{background:rgba(15,190,124,.08);border-color:rgba(15,190,124,.2);color:rgba(255,255,255,.9);}
 #viva-preevm-app .ls-ico{font-size:16px;flex-shrink:0;}
+/* BARRA DE PROGRESO LOADING */
+#viva-preevm-app .vp-progress-wrap{margin:4px 0 22px;text-align:center;}
+#viva-preevm-app .vp-progress-bar{height:5px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden;margin-bottom:10px;}
+#viva-preevm-app .vp-progress-fill{height:100%;width:45%;border-radius:3px;
+  background:linear-gradient(90deg,transparent 0%,var(--orange) 50%,transparent 100%);
+  animation:vpProgressSlide 1.6s ease-in-out infinite;}
+@keyframes vpProgressSlide{0%{transform:translateX(-200%);}100%{transform:translateX(320%);}}
+#viva-preevm-app .vp-progress-msg{font-size:12px;color:var(--gray);
+  animation:vpProgressMsgPulse 2.2s ease-in-out infinite;}
+@keyframes vpProgressMsgPulse{0%,100%{opacity:.45;}50%{opacity:1;}}
 /* VERDICT */
 #viva-preevm-app .vp-verdict{display:flex;align-items:center;gap:16px;padding:20px 24px;border-radius:16px;margin-bottom:24px;}
 #viva-preevm-app .vp-verdict.apto{background:rgba(15,190,124,.1);border:1px solid rgba(15,190,124,.25);}
@@ -1981,6 +1991,10 @@ function viva_preevm_shortcode( $atts ) {
     <span class="vp-roo-spin">&#x1F998;</span>
     <div class="vp-load-title">Analizando tu perfil...</div>
     <div class="vp-load-sub">Nuestra IA especializada en migraci&oacute;n australiana est&aacute; trabajando</div>
+  </div>
+  <div class="vp-progress-wrap">
+    <div class="vp-progress-bar"><div class="vp-progress-fill"></div></div>
+    <div class="vp-progress-msg" id="vpProgressMsg">Esto puede tardar hasta 2 minutos&hellip;</div>
   </div>
   <div class="vp-load-steps">
     <div class="ls" id="ls1"><span class="ls-ico">&#9675;</span> Leyendo y extrayendo datos del perfil</div>
@@ -2525,11 +2539,37 @@ function vpLaunchAnalysis(){
 
 function vpAnimateLoading(onDone){
   var steps=['ls1','ls2','ls3','ls4','ls5','ls6'];
-  var i=0;
+  var msgs=[
+    'Esto puede tardar hasta 2 minutos\u2026',
+    'Procesando con IA especializada\u2026',
+    'Revisando base de datos ANZSCO\u2026',
+    'Verificando requisitos de visas\u2026',
+    'Casi listo, calculando resultados\u2026',
+    'Generando tu informe personalizado\u2026'
+  ];
+  var i=0, loop=0, active=true;
+  // Permite detener el loop cuando llega el resultado
+  vpAnimateLoading._stop=function(){ active=false; };
   function next(){
+    if(!active) return;
     if(i>0) vpLsSet(steps[i-1],'done');
-    if(i<steps.length){vpLsSet(steps[i],'active');i++;setTimeout(next,900);}
-    else if(onDone) onDone();
+    if(i<steps.length){
+      vpLsSet(steps[i],'active');
+      i++;
+      setTimeout(next,950);
+    } else {
+      // Fin de una vuelta — reiniciar pasos y cambiar mensaje
+      loop++;
+      i=0;
+      var msgEl=document.getElementById('vpProgressMsg');
+      if(msgEl) msgEl.textContent=msgs[loop%msgs.length];
+      // Resetear iconos a idle
+      steps.forEach(function(id){
+        var el=document.getElementById(id);
+        if(el){el.className='ls';el.querySelector('.ls-ico').textContent='\u25cb';}
+      });
+      setTimeout(next,1400);
+    }
   }
   next();
 }
@@ -2559,6 +2599,8 @@ function vpDoAnalysis(){
   };
 
   vpApi('analyze',payload).then(function(result){
+    // Detener el loop de animación
+    if(typeof vpAnimateLoading._stop==='function') vpAnimateLoading._stop();
     vpResult=result;
     console.group('[VIVA PRE-EVM] 🔍 Resultado procesado por vpPostAnalysis');
     console.log('viability →', result.viability);
@@ -2573,6 +2615,7 @@ function vpDoAnalysis(){
     console.groupEnd();
     vpPostAnalysis(result);
   }).catch(function(err){
+    if(typeof vpAnimateLoading._stop==='function') vpAnimateLoading._stop();
     console.error('[VIVA PRE-EVM] ❌ Catch en analyze:', err);
     alert('Error al analizar: '+(err.message||'Error desconocido')+'. Por favor intenta de nuevo.');
     vpGoScreen('s4');vpUpdateSteps(4);
