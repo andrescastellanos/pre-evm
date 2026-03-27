@@ -384,7 +384,12 @@ function viva_render_result_page( $r ) {
     $recom     = is_array( $r['recomendaciones'] ?? null ) ? $r['recomendaciones'] : [];
     $bloq      = is_array( $r['bloqueantes'] ?? null ) ? $r['bloqueantes'] : [];
     $desglose  = is_array( $r['desglosePuntos'] ?? null ) ? $r['desglosePuntos'] : [];
-    $icons_map = ['cake'=>'🎂','speech'=>'🗣️','briefcase'=>'💼','clipboard'=>'📋','grad'=>'🎓'];
+    $icons_map = [
+        'cake'=>'🎂','speech'=>'🗣️','briefcase'=>'💼','clipboard'=>'📋','grad'=>'🎓',
+        'target'=>'🎯','star'=>'⭐','check'=>'✅','warning'=>'⚠️','book'=>'📚',
+        'chart'=>'📊','pin'=>'📍','rocket'=>'🚀','key'=>'🔑','time'=>'⏰',
+        'X'=>'⚡','x'=>'⚡',
+    ];
     ?>
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Cormorant+Garamond:wght@400;600&display=swap');
@@ -592,7 +597,7 @@ function viva_render_result_page( $r ) {
         <div class="sec-h"><div class="sec-num">7</div>Recomendaciones</div>
         <?php foreach ( $recom as $rec ) : ?>
         <div class="recom">
-          <span style="font-size:18px"><?php echo esc_html( $rec['icon'] ?? '🎯' ); ?></span>
+          <span style="font-size:18px"><?php $ri = $rec['icon'] ?? 'target'; echo $icons_map[$ri] ?? '🎯'; ?></span>
           <div><?php echo esc_html( $rec['texto'] ?? '' ); ?></div>
         </div>
         <?php endforeach; ?>
@@ -740,13 +745,16 @@ function viva_rest_analyze( WP_REST_Request $req ) {
     }
 
     if ( ! $result ) {
-        // Devolver el raw text en el mensaje de error para debug
         return new WP_Error(
             'parse_error',
             'Error parseando JSON de IA. Provider: ' . $provider . '. Respuesta (200 chars): ' . esc_html( substr( $raw_text, 0, 200 ) ),
             [ 'status' => 500 ]
         );
     }
+
+    // Decodificar secuencias \uXXXX que la IA inserta como texto literal dentro de los strings.
+    // Esto ocurre cuando el modelo devuelve \\u00e9 (doble-escapado) en lugar de é directamente.
+    $result = viva_decode_unicode_in_array( $result );
 
     $result['nom']      = sanitize_text_field( $req->get_param( 'nombre' )    ?? '' );
     $result['ape']      = sanitize_text_field( $req->get_param( 'apellido' )  ?? '' );
@@ -960,6 +968,39 @@ function viva_ghl_request( $method, $path, $body = null ) {
     return $method === 'POST' ? wp_remote_post( GHL_BASE_URL . $path, $args ) : wp_remote_get( GHL_BASE_URL . $path, $args );
 }
 
+/**
+ * Decodifica recursivamente secuencias \uXXXX que la IA inserta como texto literal
+ * en los valores string del array resultado. Cubre:
+ *   - BMP:  \u00e9  → é
+ *   - Surrogate pairs (emoji): \uD83C\uDFAF → 🎯
+ */
+function viva_decode_unicode_in_array( $data ) {
+    if ( is_array( $data ) ) {
+        return array_map( 'viva_decode_unicode_in_array', $data );
+    }
+    if ( ! is_string( $data ) ) {
+        return $data;
+    }
+    // Envolver en comillas y decodificar como si fuera un string JSON
+    // Esto convierte \u00e9 → é y pares surrogados → emoji correctamente
+    $encoded = json_encode( $data ); // convierte é→\u00e9 si ya es UTF-8, lo dejamos como string JSON
+    // Reemplazar secuencias \uXXXX literales (doble-escapadas: \\u00e9 en el JSON original)
+    // que quedaron como \u00e9 en la cadena PHP tras json_decode
+    $decoded = preg_replace_callback(
+        '/\\\\u([0-9a-fA-F]{4})/',
+        function ( $m ) {
+            $cp = hexdec( $m[1] );
+            // Convertir code point a UTF-8
+            if ( $cp < 0x80 )   return chr( $cp );
+            if ( $cp < 0x800 )  return chr( 0xC0 | ( $cp >> 6 ) ) . chr( 0x80 | ( $cp & 0x3F ) );
+            if ( $cp < 0x10000 ) return chr( 0xE0 | ( $cp >> 12 ) ) . chr( 0x80 | ( ( $cp >> 6 ) & 0x3F ) ) . chr( 0x80 | ( $cp & 0x3F ) );
+            return $m[0]; // fuera de BMP — dejar como está
+        },
+        $data
+    );
+    return $decoded;
+}
+
 function viva_check_rate_limit( $ip ) {
     // Los administradores de WP no tienen límite (facilita testing)
     if ( is_user_logged_in() && current_user_can( 'manage_options' ) ) return true;
@@ -1051,9 +1092,11 @@ function viva_build_system_prompt() {
         '  "laboral": "<párrafo: análisis de experiencia calificada, ocupación ANZSCO, puntos de experiencia>",',
         '  "anzsco": [{"code": "233211", "name": "Civil Engineer", "note": "<por qué este código>"}],',
         '  "visas": ["189", "190", "491"],',
-        '  "variables": [{"icon": "briefcase|cake|speech|clipboard|grad", "title": "<título>", "desc": "<descripción>"}],',
-        '  "recomendaciones": [{"icon": "🎯", "texto": "<recomendación concreta accionable>"}],',
+        '  "variables": [{"icon": "briefcase|cake|speech|clipboard|grad|chart|book|key", "title": "<título>", "desc": "<descripción>"}],',
+        '  "recomendaciones": [{"icon": "target|star|check|rocket|key|book|chart|time", "texto": "<recomendación concreta accionable>"}],',
         '  "bloqueantes": [{"icon": "X", "titulo": "<factor crítico>", "desc": "<qué implica y cómo trabajarlo>"}],',
+        'IMPORTANTE: El campo "icon" debe ser SIEMPRE una de las claves de texto indicadas (target, star, check, briefcase, etc.). NUNCA uses emojis ni secuencias \\uXXXX en los valores de "icon".',
+        'IMPORTANTE: Todos los textos en los strings del JSON deben estar en UTF-8 limpio. NUNCA uses secuencias de escape \\u00e9 — escribe directamente "é", "á", "ó", "ñ", etc.',
         '  "proximoPaso": "<texto del CTA para el usuario no-apto>",',
         '  "desglosePuntos": {',
         '    "edad": {"puntos": <n>, "detalle": "<rango de edad>"},',
@@ -2342,7 +2385,7 @@ function vpPostAnalysis(result){
 // ══════════════════════════════════════════════════════
 // MOSTRAR RESULTADO APTO / PARCIAL
 // ══════════════════════════════════════════════════════
-var ICONS={cake:'🎂',speech:'🗣️',briefcase:'💼',clipboard:'📋',grad:'🎓'};
+var ICONS={cake:'🎂',speech:'🗣️',briefcase:'💼',clipboard:'📋',grad:'🎓',target:'🎯',star:'⭐',check:'✅',warning:'⚠️',book:'📚',chart:'📊',pin:'📍',rocket:'🚀',key:'🔑',time:'⏰',X:'⚡',x:'⚡'};
 
 function vpShowResult(d){
   vpGoScreen('s-result');
@@ -2392,7 +2435,7 @@ function vpShowResult(d){
 
   var rr=document.getElementById('vpRRecom'); rr.innerHTML='';
   (d.recomendaciones||[]).forEach(function(r){
-    rr.innerHTML+='<div class="vp-recom-item"><span>'+(r.icon||'🎯')+'</span><div>'+r.texto+'</div></div>';
+    rr.innerHTML+='<div class="vp-recom-item"><span>'+(ICONS[r.icon]||r.icon||'🎯')+'</span><div>'+r.texto+'</div></div>';
   });
   if(!(d.recomendaciones||[]).length) document.getElementById('vpRRecomSec').style.display='none';
 
