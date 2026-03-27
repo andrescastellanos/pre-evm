@@ -2358,17 +2358,20 @@ function vpContinueLater(){
     var draftRes = results[1];
     var contactId = (ghlRes && ghlRes.contactId) ? ghlRes.contactId : (vpData.contactId||'');
     if(contactId) vpData.contactId = contactId;
+    console.log('[VIVA GHL] vpContinueLater — contactId:', contactId, '| continueUrl:', draftRes&&draftRes.continueUrl);
 
     // Tags
     if(contactId) vpApi('ghl-tag',{contactId:contactId,tags:['test-preevm','cv-pendiente']});
 
-    // Actualizar custom fields con el link de continuación
-    if(draftRes && draftRes.continueUrl && contactId){
+    // Actualizar continue_link — no requiere contactId, basta el email para el upsert
+    if(draftRes && draftRes.continueUrl){
+      console.log('[VIVA GHL] Enviando preevm_continue_link →', draftRes.continueUrl);
       vpApi('ghl-upsert',{
         email:vpData.email,
         firstName:vpData.nombre, lastName:vpData.apellido,
         customFields:[{key:'preevm_continue_link',field_value:draftRes.continueUrl}]
-      });
+      }).then(function(r){ console.log('[VIVA GHL] continue_link guardado, respuesta:', r); })
+        .catch(function(e){ console.error('[VIVA GHL] Error guardando continue_link:', e); });
       // Nota en GHL
       var fecha=new Date().toLocaleString('es-CO',{timeZone:'America/Bogota'});
       var nota='📋 TEST PRE-EVM — CV Pendiente — '+fecha+'\n';
@@ -2494,17 +2497,18 @@ function vpPostAnalysis(result){
     var saveRes = results[1];
     var contactId = (ghlRes && ghlRes.contactId) ? ghlRes.contactId : (vpData.contactId||'');
     if(contactId) vpData.contactId = contactId;
+    console.log('[VIVA GHL] vpPostAnalysis — contactId:', contactId, '| resultUrl:', saveRes&&saveRes.resultUrl);
 
     if(saveRes && saveRes.resultUrl){
       vpResultUrl = saveRes.resultUrl;
       result.resultUrl = saveRes.resultUrl;
-      // Actualizar custom field result_link en GHL — ahora con contactId garantizado
-      if(contactId){
-        vpApi('ghl-upsert',{
-          email:vpData.email, firstName:vpData.nombre, lastName:vpData.apellido,
-          customFields:[{key:'preevm_result_link',field_value:saveRes.resultUrl}]
-        });
-      }
+      // Actualizar result_link — no requiere contactId, basta el email para el upsert
+      console.log('[VIVA GHL] Enviando preevm_result_link →', saveRes.resultUrl);
+      vpApi('ghl-upsert',{
+        email:vpData.email, firstName:vpData.nombre, lastName:vpData.apellido,
+        customFields:[{key:'preevm_result_link',field_value:saveRes.resultUrl}]
+      }).then(function(r){ console.log('[VIVA GHL] result_link guardado, respuesta:', r); })
+        .catch(function(e){ console.error('[VIVA GHL] Error guardando result_link:', e); });
     }
     // Tags
     if(contactId) vpApi('ghl-tag',{contactId:contactId,tags:tags});
