@@ -370,50 +370,255 @@ function viva_preevm_result_content( $content ) {
 function viva_render_result_page( $r ) {
     $viability = $r['viability'] ?? 'no-apto';
     $nom       = esc_html( $r['nom'] ?? '' );
+    $ape       = esc_html( $r['ape'] ?? '' );
+    $prof      = esc_html( $r['prof'] ?? '' );
+    $pais      = esc_html( $r['pais'] ?? '' );
+    $edad      = esc_html( $r['edad'] ?? '' );
+    $eng       = esc_html( $r['eng'] ?? '' );
+    $pts       = absint( $r['pts'] ?? 0 );
+    $viaPct    = absint( $r['viaPct'] ?? 0 );
+    $compPct   = absint( $r['compPct'] ?? 0 );
+    $anzsco    = is_array( $r['anzsco'] ?? null ) ? $r['anzsco'] : [];
+    $visas     = is_array( $r['visas'] ?? null ) ? $r['visas'] : [];
+    $variables = is_array( $r['variables'] ?? null ) ? $r['variables'] : [];
+    $recom     = is_array( $r['recomendaciones'] ?? null ) ? $r['recomendaciones'] : [];
+    $bloq      = is_array( $r['bloqueantes'] ?? null ) ? $r['bloqueantes'] : [];
+    $desglose  = is_array( $r['desglosePuntos'] ?? null ) ? $r['desglosePuntos'] : [];
+    $icons_map = ['cake'=>'🎂','speech'=>'🗣️','briefcase'=>'💼','clipboard'=>'📋','grad'=>'🎓'];
     ?>
     <style>
-    .vp-result-standalone{font-family:'Outfit',sans-serif;background:#07111F;color:#fff;padding:40px 20px;border-radius:16px;max-width:820px;margin:0 auto}
-    .vp-result-standalone .verdict{display:flex;align-items:center;gap:16px;padding:20px 24px;border-radius:14px;margin-bottom:24px}
-    .vp-result-standalone .verdict.apto{background:rgba(15,190,124,.12);border:1px solid rgba(15,190,124,.3)}
-    .vp-result-standalone .verdict.parcial{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3)}
-    .vp-result-standalone .verdict.no-apto{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3)}
-    .vp-result-standalone .scores{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-bottom:24px}
-    .vp-result-standalone .sc{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:16px}
-    .vp-result-standalone .sc-lbl{font-size:11px;color:#7A8EA8;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px}
-    .vp-result-standalone .sc-val{font-size:24px;font-weight:700;margin-bottom:8px}
-    .vp-result-standalone .bar{height:4px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden}
-    .vp-result-standalone .bar-f{height:100%;border-radius:2px;transition:width 1s ease}
-    .vp-result-standalone .sec{margin-bottom:20px;padding:20px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);border-radius:14px}
-    .vp-result-standalone .sec-h{font-weight:700;font-size:15px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
-    .vp-result-standalone .sec-num{width:26px;height:26px;border-radius:50%;background:rgba(232,96,10,.15);border:1px solid rgba(232,96,10,.3);color:#E8600A;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
-    .vp-result-standalone .sec-body{font-size:14px;color:rgba(255,255,255,.75);line-height:1.7}
-    .vp-result-standalone .disclaimer{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:12px;padding:16px;font-size:13px;color:rgba(255,255,255,.7);line-height:1.6;margin-bottom:20px}
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Cormorant+Garamond:wght@400;600&display=swap');
+    .vp-sa{font-family:'Outfit',sans-serif;background:#07111F;color:#fff;padding:40px 20px;border-radius:16px;max-width:820px;margin:0 auto;line-height:1.6}
+    .vp-sa *{box-sizing:border-box}
+    .vp-sa .disc{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:12px;padding:16px;font-size:13px;color:rgba(255,255,255,.7);line-height:1.6;margin-bottom:20px}
+    .vp-sa .meta{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;font-size:13px;color:#7A8EA8}
+    .vp-sa .meta strong{color:#fff}
+    .vp-sa .verdict{display:flex;align-items:center;gap:16px;padding:20px 24px;border-radius:14px;margin-bottom:24px}
+    .vp-sa .verdict.apto{background:rgba(15,190,124,.12);border:1px solid rgba(15,190,124,.3)}
+    .vp-sa .verdict.parcial,.vp-sa .verdict.no-apto{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3)}
+    .vp-sa .scores{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-bottom:24px}
+    .vp-sa .sc{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:16px}
+    .vp-sa .sc-lbl{font-size:11px;color:#7A8EA8;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px}
+    .vp-sa .sc-val{font-size:24px;font-weight:700;margin-bottom:8px}
+    .vp-sa .bar{height:4px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden}
+    .vp-sa .bar-f{height:100%;border-radius:2px}
+    .vp-sa .sec{margin-bottom:18px;padding:20px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);border-radius:14px}
+    .vp-sa .sec-h{font-weight:700;font-size:15px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+    .vp-sa .sec-num{width:26px;height:26px;border-radius:50%;background:rgba(232,96,10,.15);border:1px solid rgba(232,96,10,.3);color:#E8600A;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;line-height:1}
+    .vp-sa .sec-body{font-size:14px;color:rgba(255,255,255,.75);line-height:1.75}
+    .vp-sa .az-item{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+    .vp-sa .az-item:last-child{border-bottom:none}
+    .vp-sa .az-code{background:rgba(232,96,10,.15);border:1px solid rgba(232,96,10,.3);color:#E8600A;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:700;white-space:nowrap;font-family:monospace}
+    .vp-sa .az-name{font-weight:600;font-size:14px}
+    .vp-sa .az-note{font-size:12px;color:#7A8EA8;margin-top:3px}
+    .vp-sa .tag{display:inline-block;padding:5px 14px;border-radius:20px;font-size:13px;font-weight:600;margin:4px;background:rgba(15,190,124,.12);border:1px solid rgba(15,190,124,.3);color:#0FBE7C}
+    .vp-sa .vari{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+    .vp-sa .vari:last-child{border-bottom:none}
+    .vp-sa .vari-ico{width:36px;height:36px;border-radius:10px;background:rgba(232,96,10,.1);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+    .vp-sa .vari-t{font-weight:600;font-size:14px}
+    .vp-sa .vari-d{font-size:13px;color:#7A8EA8;margin-top:2px}
+    .vp-sa .recom{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:14px;color:rgba(255,255,255,.8)}
+    .vp-sa .recom:last-child{border-bottom:none}
+    .vp-sa .blocker{display:flex;align-items:flex-start;gap:12px;padding:12px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.2);border-radius:10px;margin-bottom:10px}
+    .vp-sa .blocker-ico{width:32px;height:32px;border-radius:8px;background:rgba(245,158,11,.15);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+    .vp-sa .blocker-t{font-weight:600;font-size:14px;color:#F59E0B}
+    .vp-sa .blocker-d{font-size:13px;color:rgba(255,255,255,.7);margin-top:3px}
+    .vp-sa .desglose-table{width:100%;border-collapse:collapse;font-size:13px}
+    .vp-sa .desglose-table th{text-align:left;color:#7A8EA8;font-size:11px;letter-spacing:.5px;text-transform:uppercase;padding:0 8px 10px;border-bottom:1px solid rgba(255,255,255,.08)}
+    .vp-sa .desglose-table td{padding:8px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:top}
+    .vp-sa .desglose-table td:last-child{text-align:right;white-space:nowrap;font-weight:700}
+    .vp-sa .desglose-table tfoot td{font-weight:700;color:#E8600A;border-top:2px solid rgba(232,96,10,.3);border-bottom:none;padding-top:12px}
+    .vp-sa .pts-pos{color:#0FBE7C}
+    .vp-sa .pts-zero{color:#7A8EA8}
+    .vp-sa .nota-nom{font-size:12px;color:#7A8EA8;margin-top:10px;line-height:1.6}
+    .vp-sa .footer{text-align:center;padding:24px 0 0;color:#7A8EA8;font-size:12px;border-top:1px solid rgba(255,255,255,.07);margin-top:24px}
+    @media(max-width:600px){.vp-sa .scores{grid-template-columns:1fr 1fr}.vp-sa .meta{gap:10px}}
     </style>
-    <div class="vp-result-standalone">
-      <div class="disclaimer">&#9888;&#65039; Este an&aacute;lisis fue generado por inteligencia artificial y tiene car&aacute;cter 100% orientativo. Puede contener imprecisiones. Solo un agente migratorio registrado (MARA) puede confirmar tu elegibilidad real.</div>
+    <div class="vp-sa">
+
+      <!-- Disclaimer -->
+      <div class="disc">⚠️ Este análisis fue generado por inteligencia artificial y tiene carácter 100% orientativo. Puede contener imprecisiones. Solo un agente migratorio registrado (MARA) puede confirmar tu elegibilidad real.</div>
+
+      <!-- Datos del perfil -->
+      <div class="meta">
+        <span><strong><?php echo $nom . ' ' . $ape; ?></strong></span>
+        <?php if ( $prof ) : ?><span>· <?php echo $prof; ?></span><?php endif; ?>
+        <?php if ( $pais ) : ?><span>País: <strong><?php echo $pais; ?></strong></span><?php endif; ?>
+        <?php if ( $edad ) : ?><span>Edad: <strong><?php echo $edad; ?></strong></span><?php endif; ?>
+        <?php if ( $eng  ) : ?><span>Inglés: <strong><?php echo $eng; ?></strong></span><?php endif; ?>
+      </div>
+
+      <!-- Veredicto -->
       <div class="verdict <?php echo esc_attr( $viability === 'no-apto' ? 'no-apto' : $viability ); ?>">
-        <div style="font-size:28px"><?php echo $viability === 'apto' ? '&#x1F7E2;' : '&#x1F7E1;'; ?></div>
+        <div style="font-size:32px"><?php echo $viability === 'apto' ? '🟢' : '🟡'; ?></div>
         <div>
-          <div style="font-weight:700;font-size:18px">
-            <?php if ( $viability === 'apto' ) echo "&#x1F998; {$nom}, buenas noticias!"; elseif ( $viability === 'parcial' ) echo "{$nom}, perfil con potencial"; else echo "&#x1F4A1; {$nom}, tu perfil tiene oportunidades de mejora"; ?>
+          <div style="font-weight:700;font-size:18px;margin-bottom:4px">
+            <?php if ( $viability === 'apto' ) echo "🦘 {$nom}, buenas noticias!";
+                  elseif ( $viability === 'parcial' ) echo "{$nom}, perfil con potencial";
+                  else echo "💡 {$nom}, tu perfil tiene oportunidades de mejora"; ?>
+          </div>
+          <div style="font-size:13px;color:rgba(255,255,255,.65)">
+            <?php if ( $viability === 'apto' ) echo 'Los indicadores sugieren que tu perfil podría avanzar en un proceso de General Skilled Migration a Australia.';
+                  elseif ( $viability === 'parcial' ) echo 'Tu perfil cumple los mínimos pero hay variables que podrían trabajarse para ser más competitivo.';
+                  else echo 'Se identificaron aspectos que podrían beneficiarse de mejoras antes de iniciar un proceso formal.'; ?>
           </div>
         </div>
       </div>
+
+      <!-- Scores -->
       <div class="scores">
-        <div class="sc"><div class="sc-lbl">Puntaje estimado</div><div class="sc-val" style="color:#E8600A"><?php echo absint( $r['pts'] ?? 0 ); ?> pts</div><div class="bar"><div class="bar-f" style="width:<?php echo min( ( absint( $r['pts'] ?? 0 ) / 120 ) * 100, 100 ); ?>%;background:#E8600A"></div></div></div>
-        <div class="sc"><div class="sc-lbl">Viabilidad</div><div class="sc-val" style="color:#0FBE7C"><?php echo absint( $r['viaPct'] ?? 0 ); ?>%</div><div class="bar"><div class="bar-f" style="width:<?php echo absint( $r['viaPct'] ?? 0 ); ?>%;background:#0FBE7C"></div></div></div>
-        <div class="sc"><div class="sc-lbl">Competitividad</div><div class="sc-val" style="color:#F59E0B"><?php echo absint( $r['compPct'] ?? 0 ); ?>%</div><div class="bar"><div class="bar-f" style="width:<?php echo absint( $r['compPct'] ?? 0 ); ?>%;background:#F59E0B"></div></div></div>
+        <div class="sc">
+          <div class="sc-lbl">Puntaje estimado</div>
+          <div class="sc-val" style="color:#E8600A"><?php echo $pts; ?> pts</div>
+          <div class="bar"><div class="bar-f" style="width:<?php echo min( ( $pts / 120 ) * 100, 100 ); ?>%;background:#E8600A"></div></div>
+        </div>
+        <div class="sc">
+          <div class="sc-lbl">Viabilidad</div>
+          <div class="sc-val" style="color:#0FBE7C"><?php echo $viaPct; ?>%</div>
+          <div class="bar"><div class="bar-f" style="width:<?php echo $viaPct; ?>%;background:#0FBE7C"></div></div>
+        </div>
+        <div class="sc">
+          <div class="sc-lbl">Competitividad</div>
+          <div class="sc-val" style="color:#F59E0B"><?php echo $compPct; ?>%</div>
+          <div class="bar"><div class="bar-f" style="width:<?php echo $compPct; ?>%;background:#F59E0B"></div></div>
+        </div>
       </div>
-      <?php if ( !empty( $r['alcance'] ) ) : ?>
+
+      <!-- Desglose SkillSelect -->
+      <?php if ( ! empty( $desglose ) ) : ?>
+      <div class="sec">
+        <div class="sec-h"><div class="sec-num">🔢</div>Desglose de puntos SkillSelect</div>
+        <table class="desglose-table">
+          <thead><tr><th>Factor</th><th>Detalle</th><th>Pts</th></tr></thead>
+          <tbody>
+            <?php
+            $rows = [
+              'Edad'               => $desglose['edad'] ?? null,
+              'Inglés'             => $desglose['ingles'] ?? null,
+              'Exp. offshore'      => $desglose['experienciaOffshore'] ?? null,
+              'Exp. onshore (AU)'  => $desglose['experienciaOnshore'] ?? null,
+              'Educación'          => $desglose['educacion'] ?? null,
+              'Estudio en AU'      => $desglose['estudioAustralia'] ?? null,
+              'Zona regional AU'   => $desglose['estudioRegional'] ?? null,
+              'Ed. STEM AU'        => $desglose['educacionEspecializada'] ?? null,
+              'Partner skills'     => $desglose['partnerSkills'] ?? null,
+              'Professional Year'  => $desglose['professionalYear'] ?? null,
+              'NAATI'              => $desglose['naati'] ?? null,
+            ];
+            foreach ( $rows as $label => $item ) :
+              if ( empty( $item ) ) continue;
+              $p   = absint( $item['puntos'] ?? 0 );
+              $cls = $p > 0 ? 'pts-pos' : 'pts-zero';
+            ?>
+            <tr>
+              <td><?php echo esc_html( $label ); ?></td>
+              <td style="color:#7A8EA8;font-size:12px"><?php echo esc_html( $item['detalle'] ?? '' ); ?></td>
+              <td class="<?php echo $cls; ?>"><?php echo $p; ?></td>
+            </tr>
+            <?php endforeach; ?>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="2">Subtotal (sin nominación)</td>
+              <td><?php echo absint( $desglose['subtotal'] ?? $pts ); ?> pts</td>
+            </tr>
+          </tfoot>
+        </table>
+        <?php if ( ! empty( $desglose['notaNominacion'] ) ) : ?>
+        <div class="nota-nom">📝 <?php echo esc_html( $desglose['notaNominacion'] ); ?></div>
+        <?php endif; ?>
+      </div>
+      <?php endif; ?>
+
+      <!-- Secciones del informe -->
+      <?php if ( ! empty( $r['alcance'] ) ) : ?>
       <div class="sec"><div class="sec-h"><div class="sec-num">1</div>Naturaleza y alcance</div><div class="sec-body"><?php echo esc_html( $r['alcance'] ); ?></div></div>
       <?php endif; ?>
-      <?php if ( !empty( $r['academico'] ) ) : ?>
-      <div class="sec"><div class="sec-h"><div class="sec-num">2</div>An&aacute;lisis acad&eacute;mico</div><div class="sec-body"><?php echo esc_html( $r['academico'] ); ?></div></div>
+      <?php if ( ! empty( $r['academico'] ) ) : ?>
+      <div class="sec"><div class="sec-h"><div class="sec-num">2</div>Análisis académico</div><div class="sec-body"><?php echo esc_html( $r['academico'] ); ?></div></div>
       <?php endif; ?>
-      <?php if ( !empty( $r['laboral'] ) ) : ?>
-      <div class="sec"><div class="sec-h"><div class="sec-num">3</div>An&aacute;lisis laboral</div><div class="sec-body"><?php echo esc_html( $r['laboral'] ); ?></div></div>
+      <?php if ( ! empty( $r['laboral'] ) ) : ?>
+      <div class="sec"><div class="sec-h"><div class="sec-num">3</div>Análisis laboral</div><div class="sec-body"><?php echo esc_html( $r['laboral'] ); ?></div></div>
       <?php endif; ?>
-      <div style="text-align:center;padding:20px;color:#7A8EA8;font-size:13px">Informe preliminar orientativo &mdash; Viva Australia Internacional &middot; Frank Cross, Senior Migration Agent &middot; MARA 0101111</div>
+
+      <!-- Marco ocupacional (ANZSCO) -->
+      <?php if ( ! empty( $anzsco ) ) : ?>
+      <div class="sec">
+        <div class="sec-h"><div class="sec-num">4</div>Marco ocupacional (ANZSCO)</div>
+        <?php foreach ( $anzsco as $a ) : ?>
+        <div class="az-item">
+          <span class="az-code"><?php echo esc_html( $a['code'] ?? '' ); ?></span>
+          <div>
+            <div class="az-name"><?php echo esc_html( $a['name'] ?? '' ); ?></div>
+            <?php if ( ! empty( $a['note'] ) ) : ?><div class="az-note"><?php echo esc_html( $a['note'] ); ?></div><?php endif; ?>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
+
+      <!-- Visas potenciales -->
+      <?php if ( ! empty( $visas ) ) : ?>
+      <div class="sec">
+        <div class="sec-h"><div class="sec-num">5</div>Visas potenciales</div>
+        <div class="sec-body" style="margin-bottom:12px">Basado en la ocupación y el perfil actual, las siguientes subclases de visa podrían ser relevantes:</div>
+        <?php foreach ( $visas as $v ) : ?>
+        <span class="tag">Subclase <?php echo esc_html( $v ); ?></span>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
+
+      <!-- Variables de competitividad -->
+      <?php if ( ! empty( $variables ) ) : ?>
+      <div class="sec">
+        <div class="sec-h"><div class="sec-num">6</div>Variables de competitividad</div>
+        <?php foreach ( $variables as $v ) :
+          $ico = $icons_map[ $v['icon'] ?? '' ] ?? ( $v['icon'] ?? '•' );
+        ?>
+        <div class="vari">
+          <div class="vari-ico"><?php echo $ico; ?></div>
+          <div>
+            <div class="vari-t"><?php echo esc_html( $v['title'] ?? '' ); ?></div>
+            <div class="vari-d"><?php echo esc_html( $v['desc'] ?? '' ); ?></div>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
+
+      <!-- Recomendaciones -->
+      <?php if ( ! empty( $recom ) ) : ?>
+      <div class="sec">
+        <div class="sec-h"><div class="sec-num">7</div>Recomendaciones</div>
+        <?php foreach ( $recom as $rec ) : ?>
+        <div class="recom">
+          <span style="font-size:18px"><?php echo esc_html( $rec['icon'] ?? '🎯' ); ?></span>
+          <div><?php echo esc_html( $rec['texto'] ?? '' ); ?></div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
+
+      <!-- Bloqueantes (no-apto) -->
+      <?php if ( ! empty( $bloq ) ) : ?>
+      <div class="sec">
+        <div class="sec-h"><div class="sec-num">⚡</div>Aspectos a fortalecer</div>
+        <?php foreach ( $bloq as $b ) : ?>
+        <div class="blocker">
+          <div class="blocker-ico">⚡</div>
+          <div>
+            <div class="blocker-t"><?php echo esc_html( $b['titulo'] ?? $b['title'] ?? '' ); ?></div>
+            <div class="blocker-d"><?php echo esc_html( $b['desc'] ?? '' ); ?></div>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
+
+      <!-- Footer -->
+      <div class="footer">
+        Informe preliminar orientativo &mdash; Viva Australia Internacional &middot; Frank Cross, Senior Migration Agent &middot; MARA 0101111
+      </div>
     </div>
     <?php
 }
@@ -437,7 +642,7 @@ function viva_preevm_register_rest_routes() {
 // ── GHL Lookup ────────────────────────────────────────────────
 function viva_rest_ghl_lookup( WP_REST_Request $req ) {
     $email = sanitize_email( $req->get_param( 'email' ) );
-    if ( ! is_email( $email ) ) return new WP_Error( 'invalid_email', 'Email inv\u00e1lido', [ 'status' => 400 ] );
+    if ( ! is_email( $email ) ) return new WP_Error( 'invalid_email', 'Email inválido', [ 'status' => 400 ] );
     $resp = viva_ghl_request( 'POST', '/contacts/search', [
         'locationId' => GHL_LOCATION_ID,
         'filters'    => [ [ 'field' => 'email', 'operator' => 'eq', 'value' => $email ] ],
@@ -477,7 +682,7 @@ function viva_rest_ghl_upsert( WP_REST_Request $req ) {
 function viva_rest_ghl_tag( WP_REST_Request $req ) {
     $cid  = sanitize_text_field( $req->get_param( 'contactId' ) );
     $tags = array_map( 'sanitize_text_field', (array) ( $req->get_param( 'tags' ) ?? [] ) );
-    if ( empty( $cid ) || empty( $tags ) ) return new WP_Error( 'params', 'Par\u00e1metros requeridos', [ 'status' => 400 ] );
+    if ( empty( $cid ) || empty( $tags ) ) return new WP_Error( 'params', 'Parámetros requeridos', [ 'status' => 400 ] );
     $resp = viva_ghl_request( 'POST', "/contacts/{$cid}/tags", [ 'tags' => $tags ] );
     $code = (int) wp_remote_retrieve_response_code( $resp );
     return [ 'success' => $code >= 200 && $code < 300 ];
@@ -487,7 +692,7 @@ function viva_rest_ghl_tag( WP_REST_Request $req ) {
 function viva_rest_ghl_note( WP_REST_Request $req ) {
     $cid       = sanitize_text_field( $req->get_param( 'contactId' ) );
     $body_text = sanitize_textarea_field( $req->get_param( 'body' ) );
-    if ( empty( $cid ) || empty( $body_text ) ) return new WP_Error( 'params', 'Par\u00e1metros requeridos', [ 'status' => 400 ] );
+    if ( empty( $cid ) || empty( $body_text ) ) return new WP_Error( 'params', 'Parámetros requeridos', [ 'status' => 400 ] );
     $resp = viva_ghl_request( 'POST', "/contacts/{$cid}/notes", [ 'body' => $body_text, 'userId' => null ] );
     $code = (int) wp_remote_retrieve_response_code( $resp );
     return [ 'success' => $code >= 200 && $code < 300 ];
@@ -683,7 +888,7 @@ function viva_rest_save_result( WP_REST_Request $req ) {
     $result   = $data['result'] ?? [];
     $post_id  = wp_insert_post( [
         'post_type'   => 'preevm_result',
-        'post_title'  => $nombre . ' ' . $apellido . ' \u2014 ' . date( 'Y-m-d H:i' ),
+        'post_title'  => $nombre . ' ' . $apellido . ' — ' . date( 'Y-m-d H:i' ),
         'post_status' => 'publish',
     ] );
     if ( is_wp_error( $post_id ) ) return new WP_Error( 'save_error', 'Error guardando resultado', [ 'status' => 500 ] );
@@ -732,7 +937,7 @@ function viva_rest_get_draft( WP_REST_Request $req ) {
     $token = sanitize_text_field( $req->get_param( 'token' ) );
     if ( empty( $token ) ) return new WP_Error( 'missing', 'Token requerido', [ 'status' => 400 ] );
     $posts = get_posts( [ 'post_type' => 'preevm_draft', 'meta_key' => '_preevm_draft_token', 'meta_value' => $token, 'posts_per_page' => 1 ] );
-    if ( empty( $posts ) ) return new WP_Error( 'not_found', 'Link no v\u00e1lido o expirado', [ 'status' => 404 ] );
+    if ( empty( $posts ) ) return new WP_Error( 'not_found', 'Link no válido o expirado', [ 'status' => 404 ] );
     $post   = $posts[0];
     $expiry = (int) get_post_meta( $post->ID, '_preevm_draft_expiry', true );
     if ( $expiry < time() ) {
@@ -773,38 +978,38 @@ function viva_get_shortcode_page_url() {
 
 function viva_build_system_prompt() {
     return implode( "\n", [
-        'Eres un analista t\u00e9cnico de perfiles migratorios para Australia (General Skilled Migration).',
-        'Tu trabajo es analizar perfiles con criterio t\u00e9cnico PRECISO, pero tu tono es constructivo y orientativo, NUNCA categ\u00f3rico.',
+        'Eres un analista técnico de perfiles migratorios para Australia (General Skilled Migration).',
+        'Tu trabajo es analizar perfiles con criterio técnico PRECISO, pero tu tono es constructivo y orientativo, NUNCA categórico.',
         '',
         'REGLA DE ORO DE TONO:',
-        '- NUNCA uses frases categ\u00f3ricas como "usted califica", "usted no califica", "es elegible", "no es elegible".',
-        '- USA siempre lenguaje condicional: "los datos sugieren que", "el perfil podr\u00eda ser elegible", "al parecer", "seg\u00fan los indicadores".',
-        '- Para perfiles positivos: "Los indicadores sugieren que este perfil podr\u00eda avanzar en un proceso de GSM."',
-        '- Para perfiles con bloqueantes: "Se identificaron aspectos del perfil que podr\u00edan beneficiarse de mejoras antes de iniciar un proceso."',
+        '- NUNCA uses frases categóricas como "usted califica", "usted no califica", "es elegible", "no es elegible".',
+        '- USA siempre lenguaje condicional: "los datos sugieren que", "el perfil podría ser elegible", "al parecer", "según los indicadores".',
+        '- Para perfiles positivos: "Los indicadores sugieren que este perfil podría avanzar en un proceso de GSM."',
+        '- Para perfiles con bloqueantes: "Se identificaron aspectos del perfil que podrían beneficiarse de mejoras antes de iniciar un proceso."',
         '- Siempre recuerda que eres una IA orientativa y que solo un agente MARA puede confirmar elegibilidad.',
         '',
         'SISTEMA DE PUNTOS SKILLSELECT 2025-26 (referencia oficial):',
         '',
         'EDAD:',
-        '- 18-24 a\u00f1os = 25 pts | 25-32 a\u00f1os = 30 pts (m\u00e1ximo) | 33-39 a\u00f1os = 25 pts | 40-44 a\u00f1os = 15 pts | 45+ a\u00f1os = 0 pts',
+        '- 18-24 años = 25 pts | 25-32 años = 30 pts (máximo) | 33-39 años = 25 pts | 40-44 años = 15 pts | 45+ años = 0 pts',
         '',
-        'INGL\u00c9S:',
-        '- Competent (IELTS 6 / PTE 50) = 0 pts (m\u00ednimo) | Proficient (IELTS 7 / PTE 65) = 10 pts | Superior (IELTS 8 / PTE 79) = 20 pts',
-        '- Si declara "Avanzado" sin certificaci\u00f3n: asumir Competent potencial (0 pts) pero recomendar certificar.',
+        'INGLÉS:',
+        '- Competent (IELTS 6 / PTE 50) = 0 pts (mínimo) | Proficient (IELTS 7 / PTE 65) = 10 pts | Superior (IELTS 8 / PTE 79) = 20 pts',
+        '- Si declara "Avanzado" sin certificación: asumir Competent potencial (0 pts) pero recomendar certificar.',
         '- Si declara "Intermedio": advertir que necesita Competent English certificado.',
-        '- Si declara "B\u00e1sico" o "Ninguno": marcar como aspecto cr\u00edtico a trabajar.',
+        '- Si declara "Básico" o "Ninguno": marcar como aspecto crítico a trabajar.',
         '',
         'EXPERIENCIA LABORAL CALIFICADA (últimos 10 años, en ocupación nominada):',
         '- Offshore (fuera de AU): <3 = 0 pts | 3-4 = 5 pts | 5-7 = 10 pts | 8+ = 15 pts',
         '- Onshore (en AU): <1 = 0 pts | 1-2 = 5 pts | 3-4 = 10 pts | 5-7 = 15 pts | 8+ = 20 pts',
-        '- M\u00e1ximo combinado offshore + onshore: 20 pts.',
+        '- Máximo combinado offshore + onshore: 20 pts.',
         '',
-        'EDUCACI\u00d3N:',
+        'EDUCACIÓN:',
         '- Doctorado = 20 pts | Bachelor degree = 15 pts | Diploma o trade qualification AU = 10 pts',
         '',
-        'ESTUDIO EN AUSTRALIA (m\u00edn 2 a\u00f1os) = 5 pts | ZONA REGIONAL de AU = 5 pts',
+        'ESTUDIO EN AUSTRALIA (mín 2 años) = 5 pts | ZONA REGIONAL de AU = 5 pts',
         '',
-        'EDUCACI\u00d3N ESPECIALIZADA: Maestr\u00eda de investigaci\u00f3n o Doctorado en AU en STEM = 10 pts',
+        'EDUCACIÓN ESPECIALIZADA: Maestría de investigación o Doctorado en AU en STEM = 10 pts',
         '',
         'PARTNER SKILLS:',
         '- Soltero o partner es ciudadano/RP australiano = 10 pts',
@@ -814,25 +1019,25 @@ function viva_build_system_prompt() {
         '',
         'PROFESSIONAL YEAR en Australia = 5 pts | NAATI = 5 pts',
         '',
-        'NOMINACI\u00d3N: NO incluir en c\u00e1lculo base. Indicar: "Con nominaci\u00f3n estatal (190) +5 pts; con regional (491) +15 pts".',
+        'NOMINACIÓN: NO incluir en cálculo base. Indicar: "Con nominación estatal (190) +5 pts; con regional (491) +15 pts".',
         '',
-        'PUNTAJE M\u00cdNIMO EOI: 65 pts | RANGO COMPETITIVO: 80-95+ pts',
+        'PUNTAJE MÍNIMO EOI: 65 pts | RANGO COMPETITIVO: 80-95+ pts',
         '',
         'ADVERTENCIAS (usar tono constructivo):',
-        '- Edad 45+: "El sistema de puntos no asigna puntos por edad a partir de los 45 a\u00f1os."',
-        '- Sin ingl\u00e9s: "El ingl\u00e9s certificado a nivel Competent (IELTS 6.0) es un requisito fundamental."',
-        '- Sin t\u00edtulo: "Un t\u00edtulo equivalente a Bachelor degree australiano es generalmente necesario."',
-        '- <65 pts: "El puntaje estimado est\u00e1 por debajo del m\u00ednimo, pero existen formas de mejorar el score."',
+        '- Edad 45+: "El sistema de puntos no asigna puntos por edad a partir de los 45 años."',
+        '- Sin inglés: "El inglés certificado a nivel Competent (IELTS 6.0) es un requisito fundamental."',
+        '- Sin título: "Un título equivalente a Bachelor degree australiano es generalmente necesario."',
+        '- <65 pts: "El puntaje estimado está por debajo del mínimo, pero existen formas de mejorar el score."',
         '',
         'VEREDICTO (interno):',
-        '- no-apto: uno o m\u00e1s factores cr\u00edticos presentes.',
-        '- parcial: pts 65-79, o ingl\u00e9s sin certificar, o experiencia 3-4 a\u00f1os.',
-        '- apto: pts 80+, ingl\u00e9s Proficient+, experiencia 5+, ocupaci\u00f3n probablemente en lista.',
+        '- no-apto: uno o más factores críticos presentes.',
+        '- parcial: pts 65-79, o inglés sin certificar, o experiencia 3-4 años.',
+        '- apto: pts 80+, inglés Proficient+, experiencia 5+, ocupación probablemente en lista.',
         '',
-        'AN\u00c1LISIS DE CV:',
-        '- Si hay CV adjunto: extraer t\u00edtulos exactos, universidades, fechas, empresas, cargos, responsabilidades.',
-        '- Usar el CV para inferir c\u00f3digos ANZSCO espec\u00edficos basados en actividades descritas.',
-        '- NUNCA generar un an\u00e1lisis gen\u00e9rico. Cada secci\u00f3n debe referenciar datos espec\u00edficos del CV.',
+        'ANÁLISIS DE CV:',
+        '- Si hay CV adjunto: extraer títulos exactos, universidades, fechas, empresas, cargos, responsabilidades.',
+        '- Usar el CV para inferir códigos ANZSCO específicos basados en actividades descritas.',
+        '- NUNCA generar un análisis genérico. Cada sección debe referenciar datos específicos del CV.',
         '',
         'ESTRUCTURA JSON OBLIGATORIA — debes devolver EXACTAMENTE estos campos (no inventes nombres alternativos):',
         '',
@@ -874,8 +1079,8 @@ function viva_build_system_prompt() {
         '',
         'IMPORTANTE: Un ingeniero civil (233211) con edad 25-32, título universitario, y 5+ años de experiencia NUNCA es no-apto. Calcula correctamente.',
         '',
-        'Responde \u00danica y exclusivamente con JSON puro v\u00e1lido. Sin markdown. Sin texto antes ni despu\u00e9s del JSON.',
-        'CERO saltos de l\u00ednea dentro de los strings del JSON. Todos los strings en una sola línea.',
+        'Responde Única y exclusivamente con JSON puro válido. Sin markdown. Sin texto antes ni después del JSON.',
+        'CERO saltos de línea dentro de los strings del JSON. Todos los strings en una sola línea.',
     ] );
 }
 
@@ -888,27 +1093,27 @@ function viva_build_user_message( WP_REST_Request $req ) {
     $msg  = "PERFIL A EVALUAR:\n";
     $msg .= "Nombre: {$g('nombre')} {$g('apellido')}\n";
     $msg .= "Email: {$g('email')}\n";
-    $msg .= "Pa\u00eds: {$g('pais')}\n";
-    $msg .= "Profesi\u00f3n declarada: {$g('profesion')}\n";
+    $msg .= "País: {$g('pais')}\n";
+    $msg .= "Profesión declarada: {$g('profesion')}\n";
     $msg .= "Edad: {$g('edad')}\n";
-    $msg .= "Ingl\u00e9s (nivel declarado): {$g('ingles')}\n";
-    $msg .= "Certificaci\u00f3n de ingl\u00e9s: {$g('certTipo')} \u2014 Puntaje: {$g('certPuntaje')}\n";
-    $msg .= "Experiencia laboral: {$g('experiencia')} a\u00f1os\n";
+    $msg .= "Inglés (nivel declarado): {$g('ingles')}\n";
+    $msg .= "Certificación de inglés: {$g('certTipo')} — Puntaje: {$g('certPuntaje')}\n";
+    $msg .= "Experiencia laboral: {$g('experiencia')} años\n";
     $msg .= "Estado civil: {$g('estadoCivil')}\n";
     $msg .= "Pareja profesional: {$g('parejaProf')}\n";
-    $msg .= "Ingl\u00e9s de la pareja: {$g('parejaIngles')}\n\n";
-    $msg .= "Conexi\u00f3n con Australia: {$g('conexionAU')} (nunca/visita/estudi\u00f3/trabaj\u00f3)\n";
+    $msg .= "Inglés de la pareja: {$g('parejaIngles')}\n\n";
+    $msg .= "Conexión con Australia: {$g('conexionAU')} (nunca/visita/estudió/trabajó)\n";
     $msg .= "Experiencia laboral en Australia: {$g('expAU')}\n";
     $msg .= "Estudio en Australia: {$g('estudioAU')}\n";
     $msg .= "Estudio en zona regional AU: {$g('estudioRegional')}\n";
     $msg .= "Professional Year: {$g('profYear')}\n";
     $msg .= "NAATI: {$g('naati')}\n\n";
     $msg .= "Plazo deseado: {$g('plazo')}\n";
-    $msg .= "Capacidad de inversi\u00f3n: {$g('inversion')}\n";
-    $msg .= "Nivel de decisi\u00f3n: {$g('decision')}/5\n\n";
-    $msg .= "Modo de informaci\u00f3n: {$modo}\n";
+    $msg .= "Capacidad de inversión: {$g('inversion')}\n";
+    $msg .= "Nivel de decisión: {$g('decision')}/5\n\n";
+    $msg .= "Modo de información: {$modo}\n";
     if ( $g( 'modoCV' ) === 'manual' ) {
-        $msg .= "T\u00edtulo universitario: {$g('titulo')}\nPosgrado: {$g('postgrado')}\nEmpresa actual: {$g('empresa')}\nCargo: {$g('cargo')}\nActividades diarias: {$g('descripcion')}\n";
+        $msg .= "Título universitario: {$g('titulo')}\nPosgrado: {$g('postgrado')}\nEmpresa actual: {$g('empresa')}\nCargo: {$g('cargo')}\nActividades diarias: {$g('descripcion')}\n";
     }
     return $msg;
 }
