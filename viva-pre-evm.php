@@ -811,6 +811,7 @@ function viva_preevm_register_rest_routes() {
     register_rest_route( $ns, '/save-result', array_merge( [ 'methods' => 'POST', 'callback' => 'viva_rest_save_result' ], $pub ) );
     register_rest_route( $ns, '/save-draft',  array_merge( [ 'methods' => 'POST', 'callback' => 'viva_rest_save_draft'  ], $pub ) );
     register_rest_route( $ns, '/get-draft',   array_merge( [ 'methods' => 'GET',  'callback' => 'viva_rest_get_draft'   ], $pub ) );
+    register_rest_route( $ns, '/ghl-assignee', array_merge( [ 'methods' => 'GET', 'callback' => 'viva_rest_ghl_assignee' ], $pub ) );
 }
 
 // ── GHL Lookup ────────────────────────────────────────────────
@@ -870,6 +871,32 @@ function viva_rest_ghl_note( WP_REST_Request $req ) {
     $resp = viva_ghl_request( 'POST', "/contacts/{$cid}/notes", [ 'body' => $body_text, 'userId' => null ] );
     $code = (int) wp_remote_retrieve_response_code( $resp );
     return [ 'success' => $code >= 200 && $code < 300 ];
+}
+
+// ── GHL Assignee Phone — devuelve el teléfono del asesor asignado al contacto ──
+function viva_rest_ghl_assignee( WP_REST_Request $req ) {
+    $cid = sanitize_text_field( $req->get_param( 'contactId' ) );
+    if ( empty( $cid ) ) return [ 'phone' => '' ];
+
+    // 1. Obtener el contacto para extraer assignedTo (ID del usuario asignado)
+    $resp = viva_ghl_request( 'GET', "/contacts/{$cid}" );
+    if ( is_wp_error( $resp ) ) return [ 'phone' => '' ];
+    $code = (int) wp_remote_retrieve_response_code( $resp );
+    if ( $code !== 200 ) return [ 'phone' => '' ];
+    $body    = json_decode( wp_remote_retrieve_body( $resp ), true );
+    $contact = $body['contact'] ?? $body ?? [];
+    $user_id = $contact['assignedTo'] ?? '';
+    if ( empty( $user_id ) ) return [ 'phone' => '' ];
+
+    // 2. Obtener los datos del usuario asignado para leer su teléfono
+    $uresp = viva_ghl_request( 'GET', "/users/{$user_id}" );
+    if ( is_wp_error( $uresp ) ) return [ 'phone' => '' ];
+    $ucode = (int) wp_remote_retrieve_response_code( $uresp );
+    if ( $ucode !== 200 ) return [ 'phone' => '' ];
+    $user  = json_decode( wp_remote_retrieve_body( $uresp ), true );
+    // GHL devuelve el teléfono en 'phone' o 'phoneNumber' según la versión
+    $phone = $user['phone'] ?? $user['phoneNumber'] ?? $user['cellPhone'] ?? '';
+    return [ 'phone' => $phone, 'name' => trim( ( $user['firstName'] ?? '' ) . ' ' . ( $user['lastName'] ?? '' ) ) ];
 }
 
 // ── Analyze — dispatcher multi-proveedor ──────────────────────
@@ -2787,9 +2814,23 @@ function vpShowNoApto(d){
 
   if(d.proximoPaso) document.getElementById('vpNACTAtxt').textContent=d.proximoPaso;
 
-  // WhatsApp link personalizado
+  // WhatsApp link — número del asesor asignado en GHL (fallback al número por defecto)
   var waMsg=encodeURIComponent('Hola, acabo de hacer el test Pre-EVM y me gustaría que revisaran mi caso. Mi nombre es '+(d.nom||'')+' '+(d.ape||'')+' y trabajo como '+(d.prof||d.profesion||'')+'. Gracias.');
-  document.getElementById('vpWALink').href='https://wa.me/5716015800581?text='+waMsg;
+  var waDefault='5716015800581';
+  var waLinkEl=document.getElementById('vpWALink');
+  waLinkEl.href='https://wa.me/'+waDefault+'?text='+waMsg;
+  // Intentar obtener el teléfono del asesor asignado en GHL
+  if(vpData.contactId){
+    fetch(vpCfg.restUrl+'ghl-assignee?contactId='+encodeURIComponent(vpData.contactId),{
+      headers:{'X-WP-Nonce':vpCfg.nonce}
+    }).then(function(r){return r.ok?r.json():null;}).then(function(res){
+      if(res&&res.phone){
+        // Normalizar: quitar +, espacios, guiones
+        var num=res.phone.replace(/[^0-9]/g,'');
+        if(num) waLinkEl.href='https://wa.me/'+num+'?text='+waMsg;
+      }
+    }).catch(function(){/* mantener fallback */});
+  }
 
   document.querySelector('[data-screen="s-noapto"]').scrollIntoView({behavior:'smooth',block:'start'});
 }
