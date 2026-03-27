@@ -817,15 +817,15 @@ function viva_preevm_register_rest_routes() {
 function viva_rest_ghl_lookup( WP_REST_Request $req ) {
     $email = sanitize_email( $req->get_param( 'email' ) );
     if ( ! is_email( $email ) ) return new WP_Error( 'invalid_email', 'Email inválido', [ 'status' => 400 ] );
-    $resp = viva_ghl_request( 'POST', '/contacts/search', [
-        'locationId' => GHL_LOCATION_ID,
-        'filters'    => [ [ 'field' => 'email', 'operator' => 'eq', 'value' => $email ] ],
-    ] );
+    // GET /contacts/lookup es más confiable que POST /contacts/search con filters
+    $qs   = http_build_query( [ 'locationId' => GHL_LOCATION_ID, 'email' => $email ] );
+    $resp = viva_ghl_request( 'GET', '/contacts/lookup?' . $qs );
     if ( is_wp_error( $resp ) ) return [ 'found' => false ];
-    $body     = json_decode( wp_remote_retrieve_body( $resp ), true );
-    $contacts = $body['contacts'] ?? [];
-    if ( empty( $contacts ) ) return [ 'found' => false ];
-    $c = $contacts[0];
+    $code = wp_remote_retrieve_response_code( $resp );
+    $body = json_decode( wp_remote_retrieve_body( $resp ), true );
+    // 404 = contacto no existe
+    if ( $code !== 200 || empty( $body['contacts'] ) ) return [ 'found' => false ];
+    $c = $body['contacts'][0];
     return [ 'found' => true, 'contactId' => $c['id'] ?? '', 'firstName' => $c['firstName'] ?? '', 'lastName' => $c['lastName'] ?? '', 'phone' => $c['phone'] ?? '', 'tags' => $c['tags'] ?? [] ];
 }
 
@@ -2034,7 +2034,7 @@ function viva_preevm_shortcode( $atts ) {
   <!-- CTA -->
   <div class="vp-cta">
     <h3>&#x1F4C5; Valida tu resultado con un experto</h3>
-    <p>Nuestro an&aacute;lisis de IA es orientativo. Un asesor migratorio registrado (MARA 0101111) revisar&aacute; tu perfil en detalle y te confirmar&aacute; si efectivamente puedes avanzar.<br><strong>Esta asesor&iacute;a es GRATUITA y sin compromiso.</strong></p>
+    <p>Nuestro an&aacute;lisis de IA es orientativo. Un asesor migratorio registrado revisar&aacute; tu perfil en detalle y te confirmar&aacute; si efectivamente puedes avanzar.<br><strong>Esta asesor&iacute;a es GRATUITA y sin compromiso.</strong></p>
     <div class="vp-cta-btns">
       <button class="vp-btn-cta" onclick="vpScrollToCalendar()">&#x1F4C5; Agendar asesor&iacute;a gratuita &rarr;</button>
       <button class="vp-btn-sec" onclick="vpGeneratePDF()">&#x1F4C4; Descargar informe PDF</button>
