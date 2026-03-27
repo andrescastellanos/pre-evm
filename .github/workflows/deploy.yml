@@ -14,7 +14,9 @@ jobs:
       - name: Checkout código
         uses: actions/checkout@v4
 
-      - name: Deploy con FTP
+      - name: Deploy con FTP (intento 1)
+        id: ftp1
+        continue-on-error: true
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           # IP directa de Hostinger — evita que Cloudflare bloquee el puerto 21
@@ -27,7 +29,26 @@ jobs:
           security: loose
           server-dir: /public_html/wp-content/plugins/viva-pre-evm/
           local-dir: ./
-          timeout: 120000
+          timeout: 300000
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github/**
+            **/node_modules/**
+
+      - name: Deploy con FTP (reintento si falló)
+        if: steps.ftp1.outcome == 'failure'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: 82.29.154.253
+          username: u905238757.vivaaustralia.com.au
+          password: ${{ secrets.FTP_PASSWORD }}
+          port: 21
+          protocol: ftps
+          security: loose
+          server-dir: /public_html/wp-content/plugins/viva-pre-evm/
+          local-dir: ./
+          timeout: 300000
           exclude: |
             **/.git*
             **/.git*/**
