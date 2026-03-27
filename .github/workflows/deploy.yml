@@ -25,7 +25,7 @@ jobs:
           # ftps con security:loose omite validación del cert (necesario con IP directa)
           protocol: ftps
           security: loose
-          server-dir: /wp-content/plugins/viva-pre-evm/
+          server-dir: /public_html/wp-content/plugins/viva-pre-evm/
           local-dir: ./
           timeout: 120000
           exclude: |
