@@ -23,9 +23,11 @@ jobs:
           username: u905238757.vivaaustralia.com.au
           password: ${{ secrets.FTP_PASSWORD }}
           port: 21
-          protocol: ftp
+          protocol: ftps
+          security: strict
           server-dir: /public_html/wp-content/plugins/viva-pre-evm/
           local-dir: ./
+          timeout: 60000
           exclude: |
             **/.git*
             **/.git*/**
