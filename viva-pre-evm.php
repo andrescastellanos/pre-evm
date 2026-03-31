@@ -472,7 +472,14 @@ function viva_preevm_result_content( $content ) {
     $r['eng']  = esc_html( get_post_meta( $pid, '_preevm_ingles',   true ) );
     $r['prof'] = esc_html( get_post_meta( $pid, '_preevm_profesion',true ) );
     ob_start();
-    viva_render_result_page( $r );
+    // Despachar según token de asesor: ?adv=TOKEN → vista completa; sin token → vista simplificada
+    $adv_token   = sanitize_text_field( $_GET['adv'] ?? '' );
+    $saved_token = get_post_meta( $pid, '_preevm_advisor_token', true );
+    if ( ! empty( $adv_token ) && hash_equals( $saved_token, $adv_token ) ) {
+        viva_render_result_page( $r );         // Vista completa del asesor
+    } else {
+        viva_render_user_result_page( $r );    // Vista simplificada del usuario
+    }
     return ob_get_clean();
 }
 
@@ -792,6 +799,202 @@ function viva_render_result_page( $r ) {
       <!-- Footer -->
       <div class="footer">
         Informe preliminar orientativo &mdash; Viva Australia Internacional &middot; Frank Cross, Senior Migration Agent &middot; MARA 0101111
+      </div>
+    </div>
+    <?php
+}
+
+// ── Vista simplificada para el usuario (sin token de asesor) ──
+function viva_render_user_result_page( $r ) {
+    $nom   = esc_html( $r['nom'] ?? '' );
+    $ape   = esc_html( $r['ape'] ?? '' );
+    $prof  = esc_html( $r['prof'] ?? '' );
+    $pais  = esc_html( $r['pais'] ?? '' );
+    $viability = $r['viability'] ?? 'no-apto';
+    $anzsco    = is_array( $r['anzsco'] ?? null ) ? $r['anzsco'] : [];
+    $visas     = is_array( $r['visas'] ?? null ) ? $r['visas'] : [];
+    $variables = is_array( $r['variables'] ?? null ) ? $r['variables'] : [];
+    $recom     = is_array( $r['recomendaciones'] ?? null ) ? $r['recomendaciones'] : [];
+    $bloq      = is_array( $r['bloqueantes'] ?? null ) ? $r['bloqueantes'] : [];
+    $icons_map = [
+        'cake'=>'🎂','speech'=>'🗣️','briefcase'=>'💼','clipboard'=>'📋','grad'=>'🎓',
+        'target'=>'🎯','star'=>'⭐','check'=>'✅','warning'=>'⚠️','book'=>'📚',
+        'chart'=>'📊','pin'=>'📍','rocket'=>'🚀','key'=>'🔑','time'=>'⏰','X'=>'⚡','x'=>'⚡',
+    ];
+    ?>
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Cormorant+Garamond:wght@400;600&display=swap');
+    .vpu{font-family:'Outfit',sans-serif;background:#07111F;color:#fff;padding:36px 20px;border-radius:16px;max-width:800px;margin:0 auto;line-height:1.6}
+    .vpu *{box-sizing:border-box}
+    .vpu-header{text-align:center;margin-bottom:32px;padding-bottom:24px;border-bottom:1px solid rgba(255,255,255,.08)}
+    .vpu-logo{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;color:#E8600A;margin-bottom:6px;letter-spacing:.5px}
+    .vpu-subtitle{font-size:13px;color:#7A8EA8}
+    .vpu-name{font-size:24px;font-weight:700;margin:16px 0 4px}
+    .vpu-meta{font-size:13px;color:#7A8EA8;margin-bottom:0}
+    .vpu-disc{background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.18);border-radius:12px;padding:14px 16px;font-size:13px;color:rgba(255,255,255,.65);line-height:1.65;margin-bottom:24px}
+    .vpu-sec{margin-bottom:18px;padding:20px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:14px}
+    .vpu-sec-h{font-weight:700;font-size:15px;margin-bottom:12px;display:flex;align-items:center;gap:10px}
+    .vpu-sec-num{width:26px;height:26px;border-radius:50%;background:rgba(232,96,10,.15);border:1px solid rgba(232,96,10,.3);color:#E8600A;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;line-height:1}
+    .vpu-sec-body{font-size:14px;color:rgba(255,255,255,.75);line-height:1.75}
+    .vpu-az-item{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+    .vpu-az-item:last-child{border-bottom:none}
+    .vpu-az-code{background:rgba(232,96,10,.15);border:1px solid rgba(232,96,10,.3);color:#E8600A;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:700;white-space:nowrap;font-family:monospace}
+    .vpu-az-name{font-weight:600;font-size:14px}
+    .vpu-az-note{font-size:12px;color:#7A8EA8;margin-top:3px}
+    .vpu-tag{display:inline-block;padding:5px 14px;border-radius:20px;font-size:13px;font-weight:600;margin:4px;background:rgba(15,190,124,.12);border:1px solid rgba(15,190,124,.3);color:#0FBE7C}
+    .vpu-vari{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+    .vpu-vari:last-child{border-bottom:none}
+    .vpu-vari-ico{width:34px;height:34px;border-radius:10px;background:rgba(232,96,10,.1);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+    .vpu-vari-t{font-weight:600;font-size:14px}
+    .vpu-vari-d{font-size:13px;color:#7A8EA8;margin-top:2px}
+    .vpu-recom{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:14px;color:rgba(255,255,255,.8)}
+    .vpu-recom:last-child{border-bottom:none}
+    .vpu-blocker{display:flex;align-items:flex-start;gap:12px;padding:12px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.2);border-radius:10px;margin-bottom:10px}
+    .vpu-blocker-t{font-weight:600;font-size:14px;color:#F59E0B}
+    .vpu-blocker-d{font-size:13px;color:rgba(255,255,255,.7);margin-top:3px}
+    .vpu-evm{background:rgba(232,96,10,.06);border:1px solid rgba(232,96,10,.18);border-radius:14px;padding:24px;margin-bottom:18px}
+    .vpu-evm-h{font-weight:700;font-size:16px;margin-bottom:10px;color:#E8600A}
+    .vpu-evm-body{font-size:14px;color:rgba(255,255,255,.75);line-height:1.75}
+    .vpu-video{margin-top:16px;border-radius:10px;overflow:hidden;aspect-ratio:16/9;background:#000}
+    .vpu-video iframe{width:100%;height:100%;border:none}
+    .vpu-cta{background:linear-gradient(135deg,rgba(232,96,10,.12),rgba(232,96,10,.06));border:1px solid rgba(232,96,10,.25);border-radius:16px;padding:28px 24px;text-align:center;margin-top:24px}
+    .vpu-cta h3{font-size:20px;font-weight:700;margin:0 0 10px}
+    .vpu-cta p{font-size:14px;color:rgba(255,255,255,.7);margin:0 0 20px;line-height:1.65}
+    .vpu-btn-primary{display:inline-block;background:#E8600A;color:#fff;font-weight:700;font-size:15px;padding:14px 28px;border-radius:10px;text-decoration:none;margin:6px;cursor:pointer;border:none}
+    .vpu-btn-primary:hover{background:#d4550a;color:#fff}
+    .vpu-footer{text-align:center;padding:20px 0 0;color:#4A5E78;font-size:12px;border-top:1px solid rgba(255,255,255,.06);margin-top:24px;line-height:1.7}
+    @media(max-width:600px){.vpu{padding:20px 14px}}
+    </style>
+    <div class="vpu">
+
+      <!-- Encabezado -->
+      <div class="vpu-header">
+        <div class="vpu-logo">Viva Australia Internacional</div>
+        <div class="vpu-subtitle">Pre-Evaluación Migratoria · Informe de perfil</div>
+        <div class="vpu-name"><?php echo $nom . ' ' . $ape; ?></div>
+        <?php if ( $prof || $pais ) : ?>
+        <div class="vpu-meta"><?php echo implode( ' · ', array_filter( [ $prof, $pais ] ) ); ?></div>
+        <?php endif; ?>
+      </div>
+
+      <!-- Aviso importante -->
+      <div class="vpu-disc">⚠️ Este informe es de carácter orientativo y ha sido preparado a partir de los datos declarados. No constituye asesoramiento migratorio formal. Solo un consultor migratorio registrado (MARA) puede confirmar eligibilidad bajo la Migration Act 1958 (Cth). Los indicadores presentados podrían variar según documentación real.</div>
+
+      <!-- Sección 1: Naturaleza y alcance -->
+      <?php if ( ! empty( $r['alcance'] ) ) : ?>
+      <div class="vpu-sec">
+        <div class="vpu-sec-h"><div class="vpu-sec-num">1</div>Naturaleza y alcance del informe</div>
+        <div class="vpu-sec-body"><?php echo esc_html( $r['alcance'] ); ?></div>
+      </div>
+      <?php endif; ?>
+
+      <!-- Sección 2: Análisis académico -->
+      <?php if ( ! empty( $r['academico'] ) ) : ?>
+      <div class="vpu-sec">
+        <div class="vpu-sec-h"><div class="vpu-sec-num">2</div>Perfil académico</div>
+        <div class="vpu-sec-body"><?php echo esc_html( $r['academico'] ); ?></div>
+      </div>
+      <?php endif; ?>
+
+      <!-- Sección 3: Análisis laboral -->
+      <?php if ( ! empty( $r['laboral'] ) ) : ?>
+      <div class="vpu-sec">
+        <div class="vpu-sec-h"><div class="vpu-sec-num">3</div>Experiencia laboral</div>
+        <div class="vpu-sec-body"><?php echo esc_html( $r['laboral'] ); ?></div>
+      </div>
+      <?php endif; ?>
+
+      <!-- Sección 4: Ocupación ANZSCO -->
+      <?php if ( ! empty( $anzsco ) ) : ?>
+      <div class="vpu-sec">
+        <div class="vpu-sec-h"><div class="vpu-sec-num">4</div>Ocupación identificada (ANZSCO)</div>
+        <?php foreach ( $anzsco as $a ) : ?>
+        <div class="vpu-az-item">
+          <span class="vpu-az-code"><?php echo esc_html( $a['code'] ?? '' ); ?></span>
+          <div>
+            <div class="vpu-az-name"><?php echo esc_html( $a['name'] ?? '' ); ?></div>
+            <?php if ( ! empty( $a['note'] ) ) : ?><div class="vpu-az-note"><?php echo esc_html( $a['note'] ); ?></div><?php endif; ?>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
+
+      <!-- Sección 5: Variables de competitividad -->
+      <?php if ( ! empty( $variables ) ) : ?>
+      <div class="vpu-sec">
+        <div class="vpu-sec-h"><div class="vpu-sec-num">5</div>Variables del perfil</div>
+        <?php foreach ( $variables as $v ) :
+          $ico = $icons_map[ $v['icon'] ?? '' ] ?? ( $v['icon'] ?? '•' );
+        ?>
+        <div class="vpu-vari">
+          <div class="vpu-vari-ico"><?php echo $ico; ?></div>
+          <div>
+            <div class="vpu-vari-t"><?php echo esc_html( $v['title'] ?? '' ); ?></div>
+            <div class="vpu-vari-d"><?php echo esc_html( $v['desc'] ?? '' ); ?></div>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
+
+      <!-- Sección 6: Visas potenciales -->
+      <?php if ( ! empty( $visas ) ) : ?>
+      <div class="vpu-sec">
+        <div class="vpu-sec-h"><div class="vpu-sec-num">6</div>Visas que podrían aplicar</div>
+        <div class="vpu-sec-body" style="margin-bottom:12px">Basado en los datos declarados, las siguientes subclases podrían ser relevantes para este perfil:</div>
+        <?php foreach ( $visas as $v ) : ?>
+        <span class="vpu-tag">Subclase <?php echo esc_html( $v ); ?></span>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
+
+      <!-- Sección 7: Recomendaciones / Bloqueantes -->
+      <?php if ( ! empty( $recom ) || ! empty( $bloq ) ) : ?>
+      <div class="vpu-sec">
+        <div class="vpu-sec-h"><div class="vpu-sec-num">7</div>Observaciones y próximos pasos sugeridos</div>
+        <?php foreach ( $bloq as $b ) : ?>
+        <div class="vpu-blocker">
+          <div style="font-size:20px;flex-shrink:0">⚡</div>
+          <div>
+            <div class="vpu-blocker-t"><?php echo esc_html( $b['titulo'] ?? $b['title'] ?? '' ); ?></div>
+            <div class="vpu-blocker-d"><?php echo esc_html( $b['desc'] ?? '' ); ?></div>
+          </div>
+        </div>
+        <?php endforeach; ?>
+        <?php foreach ( $recom as $rec ) : ?>
+        <div class="vpu-recom">
+          <span style="font-size:18px"><?php $ri = $rec['icon'] ?? 'target'; echo $icons_map[$ri] ?? '🎯'; ?></span>
+          <div><?php echo esc_html( $rec['texto'] ?? '' ); ?></div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
+
+      <!-- Qué es la EVM y video -->
+      <div class="vpu-evm">
+        <div class="vpu-evm-h">🦘 ¿Qué es la Evaluación Migratoria (EVM)?</div>
+        <div class="vpu-evm-body">
+          La Evaluación Migratoria es el proceso formal en el que un consultor MARA registrado revisa tu perfil completo —título universitario, experiencia laboral, certificaciones de inglés y situación familiar— para determinar si reúnes los requisitos para aplicar a una visa de habilidades (General Skilled Migration) en Australia.<br><br>
+          A diferencia de este pre-análisis, la EVM incluye la validación documental real, la consulta de las listas de ocupaciones vigentes y la proyección de puntaje definitivo según SkillSelect. Es el primer paso formal antes de iniciar cualquier proceso migratorio.
+        </div>
+        <div class="vpu-video">
+          <iframe src="https://www.youtube.com/embed/_SG7tg6SUEk" allowfullscreen loading="lazy" title="¿Qué es la EVM?"></iframe>
+        </div>
+      </div>
+
+      <!-- CTA: Agendar EVM -->
+      <div class="vpu-cta">
+        <h3>¿Quieres dar el siguiente paso?</h3>
+        <p>Si los indicadores de tu perfil te generan interés, el siguiente paso recomendado es una Evaluación Migratoria con uno de nuestros consultores. Esto nos permitirá analizar tu caso en detalle y orientarte de manera personalizada.</p>
+        <a class="vpu-btn-primary" href="https://buy.stripe.com/9AQ8xq7zw4FG5rOeUW" target="_blank" rel="noopener">Solicitar mi Evaluación Migratoria →</a>
+      </div>
+
+      <!-- Footer -->
+      <div class="vpu-footer">
+        Informe orientativo &mdash; Viva Australia Internacional<br>
+        Frank Cross, Senior Migration Agent · MARA 0101111<br>
+        Este documento no constituye asesoramiento migratorio formal bajo la Migration Act 1958 (Cth).
       </div>
     </div>
     <?php
@@ -1135,18 +1338,25 @@ function viva_rest_save_result( WP_REST_Request $req ) {
     foreach ( $meta_fields as $k => $v ) update_post_meta( $post_id, $k, $v );
     $result_url = get_permalink( $post_id );
 
-    // Actualizar preevm_result_link en GHL directamente desde PHP —
-    // más fiable que una segunda llamada JS.
+    // Generar token único para la vista del asesor
+    $advisor_token = wp_generate_password( 40, false );
+    update_post_meta( $post_id, '_preevm_advisor_token', $advisor_token );
+    $advisor_url = add_query_arg( 'adv', $advisor_token, $result_url );
+
+    // Actualizar campos en GHL directamente desde PHP
     $email = sanitize_email( $data['email'] ?? '' );
     if ( $email && $result_url ) {
         viva_ghl_request( 'POST', '/contacts/upsert', [
             'locationId'   => GHL_LOCATION_ID,
             'email'        => $email,
-            'customFields' => [ [ 'key' => 'preevm_result_link', 'field_value' => $result_url ] ],
+            'customFields' => [
+                [ 'key' => 'preevm_result_link',   'field_value' => $result_url  ],
+                [ 'key' => 'preevm_advisor_link',  'field_value' => $advisor_url ],
+            ],
         ] );
     }
 
-    return [ 'resultUrl' => $result_url, 'resultId' => $post_id ];
+    return [ 'resultUrl' => $result_url, 'advisorUrl' => $advisor_url, 'resultId' => $post_id ];
 }
 
 // ── Save Draft ────────────────────────────────────────────────
@@ -1309,111 +1519,132 @@ function viva_get_shortcode_page_url() {
 
 function viva_build_system_prompt() {
     return implode( "\n", [
-        'Eres un analista técnico de perfiles migratorios para Australia (General Skilled Migration).',
-        'Tu trabajo es analizar perfiles con criterio técnico PRECISO, pero tu tono es constructivo y orientativo, NUNCA categórico.',
+        'Eres un analista técnico especializado en perfiles de migración calificada a Australia (General Skilled Migration — GSM).',
+        'Tu función es preparar un informe de pre-evaluación orientativo, basado en los datos declarados, para que un consultor registrado MARA lo revise y valide antes de compartirlo con el candidato.',
         '',
-        'REGLA DE ORO DE TONO:',
-        '- NUNCA uses frases categóricas como "usted califica", "usted no califica", "es elegible", "no es elegible".',
-        '- USA siempre lenguaje condicional: "los datos sugieren que", "el perfil podría ser elegible", "al parecer", "según los indicadores".',
+        '════════════════════════════════════════════════════',
+        'REGLAS DE TONO — OBLIGATORIAS',
+        '════════════════════════════════════════════════════',
+        '- NUNCA uses frases categóricas: "usted califica", "usted no califica", "es elegible", "no es elegible".',
+        '- USA siempre lenguaje condicional: "los indicadores sugieren que", "podría ser elegible", "al parecer", "quizá", "tal vez", "según los datos declarados".',
+        '- NUNCA menciones "inteligencia artificial", "IA", "modelo" ni tecnología de ningún tipo.',
+        '- El informe debe sonar como un análisis técnico preparado por un analista humano experimentado.',
         '- Para perfiles positivos: "Los indicadores sugieren que este perfil podría avanzar en un proceso de GSM."',
-        '- Para perfiles con bloqueantes: "Se identificaron aspectos del perfil que podrían beneficiarse de mejoras antes de iniciar un proceso."',
-        '- Siempre recuerda que eres una IA orientativa y que solo un agente MARA puede confirmar elegibilidad.',
+        '- Para perfiles con bloqueantes: "Se identificaron aspectos que podrían beneficiarse de mejoras previas antes de iniciar un proceso formal."',
+        '- SIEMPRE indica que solo un consultor MARA puede confirmar elegibilidad real.',
         '',
-        'SISTEMA DE PUNTOS SKILLSELECT 2025-26 (referencia oficial):',
+        '════════════════════════════════════════════════════',
+        'ESCENARIOS DE VIABILIDAD',
+        '════════════════════════════════════════════════════',
+        '',
+        'ESCENARIO A — Perfil con indicadores positivos (viability: "apto"):',
+        '  · Puntaje SkillSelect estimado ≥ 80 pts',
+        '  · Inglés con certificación Proficient o Superior (IELTS 7+ / PTE 65+)',
+        '  · Experiencia laboral calificada ≥ 5 años',
+        '  · Ocupación probablemente incluida en listas australianas vigentes',
+        '  → Tono: constructivo, motivador, con énfasis en fortalezas. Usa "podría avanzar", "los indicadores son favorables".',
+        '',
+        'ESCENARIO B — Perfil con potencial mejorable (viability: "parcial"):',
+        '  · Puntaje estimado 65–79 pts, O inglés sin certificación formal, O experiencia 3–4 años',
+        '  · Algún factor mejorable pero sin bloqueantes absolutos',
+        '  → Tono: equilibrado. Señala oportunidades de mejora con lenguaje constructivo. Usa "hay aspectos que podrían trabajarse", "con algunos ajustes el perfil podría fortalecer su posición".',
+        '',
+        'ESCENARIO C — Perfil con factores críticos (viability: "no-apto"):',
+        '  · SOLO si hay factores absolutamente bloqueantes: edad 45+, inglés básico/ninguno sin posibilidad real de mejora, ocupación definitivamente fuera de listas australianas, o pts < 50 incluso proyectando nominación',
+        '  → Tono: empático, constructivo. Enfatiza qué se puede trabajar. NUNCA uses un tono de rechazo definitivo.',
+        '  → IMPORTANTE: Un perfil con puntaje bajo pero edad favorable (25–39) y ocupación vigente es Escenario B, nunca C.',
+        '',
+        '════════════════════════════════════════════════════',
+        'SISTEMA DE PUNTOS SKILLSELECT 2025-26',
+        '════════════════════════════════════════════════════',
         '',
         'EDAD:',
-        '- 18-24 años = 25 pts | 25-32 años = 30 pts (máximo) | 33-39 años = 25 pts | 40-44 años = 15 pts | 45+ años = 0 pts',
+        '  18-24 años = 25 pts | 25-32 años = 30 pts | 33-39 años = 25 pts | 40-44 años = 15 pts | 45+ años = 0 pts',
         '',
-        'INGLÉS:',
-        '- Competent (IELTS 6 / PTE 50) = 0 pts (mínimo) | Proficient (IELTS 7 / PTE 65) = 10 pts | Superior (IELTS 8 / PTE 79) = 20 pts',
-        '- Si declara "Avanzado" sin certificación: asumir Competent potencial (0 pts) pero recomendar certificar.',
-        '- Si declara "Intermedio": advertir que necesita Competent English certificado.',
-        '- Si declara "Básico" o "Ninguno": marcar como aspecto crítico a trabajar.',
+        'INGLÉS (certificado):',
+        '  Competent (IELTS 6.0 / PTE 50) = 0 pts — mínimo requerido',
+        '  Proficient (IELTS 7.0 / PTE 65) = 10 pts',
+        '  Superior (IELTS 8.0 / PTE 79) = 20 pts',
+        '  Sin certificación: asumir 0 pts, señalar la importancia de certificar',
         '',
         'EXPERIENCIA LABORAL CALIFICADA (últimos 10 años, en ocupación nominada):',
-        '- Offshore (fuera de AU): <3 = 0 pts | 3-4 = 5 pts | 5-7 = 10 pts | 8+ = 15 pts',
-        '- Onshore (en AU): <1 = 0 pts | 1-2 = 5 pts | 3-4 = 10 pts | 5-7 = 15 pts | 8+ = 20 pts',
-        '- Máximo combinado offshore + onshore: 20 pts.',
+        '  Offshore (fuera de AU): < 3 años = 0 pts | 3-4 = 5 pts | 5-7 = 10 pts | 8+ = 15 pts',
+        '  Onshore (en AU):        < 1 año  = 0 pts | 1-2 = 5 pts | 3-4 = 10 pts | 5-7 = 15 pts | 8+ = 20 pts',
+        '  Máximo combinado: 20 pts',
         '',
         'EDUCACIÓN:',
-        '- Doctorado = 20 pts | Bachelor degree = 15 pts | Diploma o trade qualification AU = 10 pts',
+        '  Doctorado = 20 pts | Bachelor degree = 15 pts | Diploma o trade qualification AU = 10 pts',
         '',
-        'ESTUDIO EN AUSTRALIA (mín 2 años) = 5 pts | ZONA REGIONAL de AU = 5 pts',
-        '',
-        'EDUCACIÓN ESPECIALIZADA: Maestría de investigación o Doctorado en AU en STEM = 10 pts',
+        'BONOS:',
+        '  Estudio en AU (mín 2 años) = 5 pts | Zona regional AU = 5 pts',
+        '  Maestría/Doctorado STEM en AU = 10 pts',
+        '  Professional Year = 5 pts | NAATI = 5 pts',
         '',
         'PARTNER SKILLS:',
-        '- Soltero o partner es ciudadano/RP australiano = 10 pts',
-        '- Partner tiene Competent English + Skills Assessment = 10 pts',
-        '- Partner tiene Competent English sin Skills Assessment = 5 pts',
-        '- Partner no cumple ninguno = 0 pts',
+        '  Soltero o partner es ciudadano/RP = 10 pts',
+        '  Partner con Competent English + Skills Assessment = 10 pts',
+        '  Partner con Competent English sin Skills Assessment = 5 pts',
         '',
-        'PROFESSIONAL YEAR en Australia = 5 pts | NAATI = 5 pts',
-        '',
-        'NOMINACIÓN: NO incluir en cálculo base. Indicar: "Con nominación estatal (190) +5 pts; con regional (491) +15 pts".',
+        'NOMINACIÓN: NO incluir en puntaje base. Indicar: "Con nominación estatal (190): +5 pts; regional (491): +15 pts."',
         '',
         'PUNTAJE MÍNIMO EOI: 65 pts | RANGO COMPETITIVO: 80-95+ pts',
         '',
-        'ADVERTENCIAS (usar tono constructivo):',
-        '- Edad 45+: "El sistema de puntos no asigna puntos por edad a partir de los 45 años."',
-        '- Sin inglés: "El inglés certificado a nivel Competent (IELTS 6.0) es un requisito fundamental."',
-        '- Sin título: "Un título equivalente a Bachelor degree australiano es generalmente necesario."',
-        '- <65 pts: "El puntaje estimado está por debajo del mínimo, pero existen formas de mejorar el score."',
+        '════════════════════════════════════════════════════',
+        'VALIDACIÓN ANZSCO — OBLIGATORIA',
+        '════════════════════════════════════════════════════',
+        '- Proporciona códigos ANZSCO reales de 6 dígitos (no inventados).',
+        '- Basa los códigos en las actividades concretas descritas en el CV o declaradas.',
+        '- Si la ocupación es ambigua, lista 2-3 códigos posibles con justificación.',
+        '- NUNCA asignes códigos genéricos sin fundamento en los datos del perfil.',
+        '- Ocupa códigos que sean relevantes para las listas australianas (MLTSSL, STSOL, ROL) cuando sea posible.',
         '',
-        'VEREDICTO (interno):',
-        '- no-apto: uno o más factores críticos presentes.',
-        '- parcial: pts 65-79, o inglés sin certificar, o experiencia 3-4 años.',
-        '- apto: pts 80+, inglés Proficient+, experiencia 5+, ocupación probablemente en lista.',
+        '════════════════════════════════════════════════════',
+        'ANÁLISIS DE CV',
+        '════════════════════════════════════════════════════',
+        '- Si hay CV: extraer títulos exactos, universidades, fechas, empresas, cargos, responsabilidades.',
+        '- Usar el CV para inferir códigos ANZSCO basados en actividades descritas.',
+        '- NUNCA generar análisis genérico. Cada sección debe referenciar datos específicos del perfil.',
+        '- Si hay discrepancias entre CV y datos declarados, señalarlo con lenguaje neutro.',
         '',
-        'ANÁLISIS DE CV:',
-        '- Si hay CV adjunto: extraer títulos exactos, universidades, fechas, empresas, cargos, responsabilidades.',
-        '- Usar el CV para inferir códigos ANZSCO específicos basados en actividades descritas.',
-        '- NUNCA generar un análisis genérico. Cada sección debe referenciar datos específicos del CV.',
-        '',
-        'ESTRUCTURA JSON OBLIGATORIA — debes devolver EXACTAMENTE estos campos (no inventes nombres alternativos):',
+        '════════════════════════════════════════════════════',
+        'ESTRUCTURA JSON OBLIGATORIA',
+        '════════════════════════════════════════════════════',
         '',
         '{',
         '  "viability": "apto|parcial|no-apto",',
-        '  "pts": <número entero 0-120, suma del desglose sin nominación>,',
+        '  "pts": <entero 0-120, suma del desglose sin nominación>,',
         '  "viaPct": <porcentaje 0-100 de viabilidad general>,',
         '  "compPct": <porcentaje 0-100 de competitividad en pool>,',
-        '  "alcance": "<párrafo: naturaleza del análisis, qué se evaluó y limitaciones>",',
-        '  "academico": "<párrafo: análisis del título, homologación, entidad evaluadora, puntos de educación>",',
-        '  "laboral": "<párrafo: análisis de experiencia calificada, ocupación ANZSCO, puntos de experiencia>",',
-        '  "anzsco": [{"code": "233211", "name": "Civil Engineer", "note": "<por qué este código>"}],',
+        '  "alcance": "<párrafo: qué se analizó, con qué datos, limitaciones y carácter orientativo>",',
+        '  "academico": "<párrafo: análisis del título, homologación potencial, entidad evaluadora probable, puntos de educación>",',
+        '  "laboral": "<párrafo: análisis de experiencia calificada, relación con ocupación ANZSCO, puntos de experiencia>",',
+        '  "anzsco": [{"code": "233211", "name": "Civil Engineer", "note": "<razón del código basada en el perfil>"}],',
         '  "visas": ["189", "190", "491"],',
         '  "variables": [{"icon": "briefcase|cake|speech|clipboard|grad|chart|book|key", "title": "<título>", "desc": "<descripción>"}],',
-        '  "recomendaciones": [{"icon": "target|star|check|rocket|key|book|chart|time", "texto": "<recomendación concreta accionable>"}],',
-        '  "bloqueantes": [{"icon": "X", "titulo": "<factor crítico>", "desc": "<qué implica y cómo trabajarlo>"}],',
-        'IMPORTANTE: El campo "icon" debe ser SIEMPRE una de las claves de texto indicadas (target, star, check, briefcase, etc.). NUNCA uses emojis ni secuencias \\uXXXX en los valores de "icon".',
-        'IMPORTANTE: Todos los textos en los strings del JSON deben estar en UTF-8 limpio. NUNCA uses secuencias de escape \\u00e9 — escribe directamente "é", "á", "ó", "ñ", etc.',
-        '  "proximoPaso": "<texto del CTA para el usuario no-apto>",',
+        '  "recomendaciones": [{"icon": "target|star|check|rocket|key|book|chart|time", "texto": "<observación accionable con lenguaje condicional>"}],',
+        '  "bloqueantes": [{"icon": "X", "titulo": "<factor crítico>", "desc": "<qué implica y cómo podría trabajarse>"}],',
+        '  "proximoPaso": "<texto orientativo para el candidato>",',
         '  "desglosePuntos": {',
-        '    "edad": {"puntos": <n>, "detalle": "<rango de edad>"},',
+        '    "edad": {"puntos": <n>, "detalle": "<rango>"},',
         '    "ingles": {"puntos": <n>, "detalle": "<nivel y certificación>"},',
         '    "experienciaOffshore": {"puntos": <n>, "detalle": "<años fuera de AU>"},',
         '    "experienciaOnshore": {"puntos": <n>, "detalle": "<años en AU>"},',
         '    "educacion": {"puntos": <n>, "detalle": "<tipo de título>"},',
         '    "estudioAustralia": {"puntos": <n>, "detalle": "<si estudió en AU>"},',
-        '    "estudioRegional": {"puntos": <n>, "detalle": "<si fue zona regional AU>"},',
-        '    "educacionEspecializada": {"puntos": <n>, "detalle": "<maestría/doctorado STEM en AU>"},',
+        '    "estudioRegional": {"puntos": <n>, "detalle": "<zona regional AU>"},',
+        '    "educacionEspecializada": {"puntos": <n>, "detalle": "<maestría/doctorado STEM AU>"},',
         '    "partnerSkills": {"puntos": <n>, "detalle": "<situación de pareja>"},',
-        '    "professionalYear": {"puntos": <n>, "detalle": "<si hizo PY en AU>"},',
-        '    "naati": {"puntos": <n>, "detalle": "<si tiene NAATI>"},',
-        '    "subtotal": <suma de todos los puntos anteriores>,',
+        '    "professionalYear": {"puntos": <n>, "detalle": "<Professional Year en AU>"},',
+        '    "naati": {"puntos": <n>, "detalle": "<credencial NAATI>"},',
+        '    "subtotal": <suma de todos los anteriores>,',
         '    "notaNominacion": "Con nominación estatal (190): +5 pts | Con regional (491): +15 pts."',
         '  }',
         '}',
         '',
-        'REGLAS DE VIABILITY:',
-        '- "apto": pts >= 80 Y inglés tiene certificación Proficient+ (IELTS 7+ o PTE 65+) Y experiencia >= 5 años.',
-        '- "parcial": pts 65-79 O inglés sin certificar O experiencia 3-4 años O algún factor mejorable. NO uses no-apto si el perfil tiene oportunidades reales.',
-        '- "no-apto": SOLO si hay factores absolutamente bloqueantes — edad 45+, inglés básico/ninguno sin posibilidad, profesión fuera de las listas australianas, o pts < 50 incluso con nominación.',
-        '',
-        'IMPORTANTE: Un ingeniero civil (233211) con edad 25-32, título universitario, y 5+ años de experiencia NUNCA es no-apto. Calcula correctamente.',
-        '',
-        'Responde Única y exclusivamente con JSON puro válido. Sin markdown. Sin texto antes ni después del JSON.',
-        'CERO saltos de línea dentro de los strings del JSON. Todos los strings en una sola línea.',
+        'CAMPO "icon": usa SOLO las claves de texto indicadas. NUNCA emojis ni secuencias \\uXXXX.',
+        'STRINGS: UTF-8 limpio. NUNCA secuencias \\u00e9 — escribe directamente é, á, ó, ñ, etc.',
+        'JSON PURO: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto antes ni después.',
+        'CERO saltos de línea dentro de los strings. Todos los strings en una sola línea.',
     ] );
 }
 
@@ -2127,6 +2358,17 @@ function viva_preevm_shortcode( $atts ) {
   <button class="vp-btn-reset" onclick="vpReset()">&#x2190; Analizar otro perfil</button>
 </div>
 
+<!-- ═══ CONFIRMACIÓN: RESULTADO RECIBIDO ═══ -->
+<div class="vp-card" data-screen="s-received" style="display:none">
+  <div class="vp-confirm-ico">&#x2705;</div>
+  <div class="vp-confirm-title">&#x1F4E8; &iexcl;Hemos recibido tu CV, <span id="vpReceivedNombre"></span>!</div>
+  <div class="vp-confirm-sub">
+    En aproximadamente <strong>1 hora</strong> recibir&aacute;s los resultados de tu evaluaci&oacute;n por <strong>WhatsApp</strong> y <strong>correo electr&oacute;nico</strong>, revisados por uno de nuestros consultores.<br><br>
+    &#x1F998; Nuestro equipo analizar&aacute; tu perfil con detalle y te contactar&aacute; con los indicadores y los pr&oacute;ximos pasos recomendados.
+  </div>
+  <div class="vp-confirm-tip">&#x1F4F1; Mant&eacute;n tu WhatsApp activo &mdash; as&iacute; es como compartimos los resultados.</div>
+</div>
+
 <!-- ═══ CONFIRMACIÓN: CONTINUAR DESPUÉS ═══ -->
 <div class="vp-card" data-screen="s-continuar" style="display:none">
   <div class="vp-confirm-ico">&#x2705;</div>
@@ -2178,7 +2420,7 @@ var QUIZ_QUESTIONS = [
    cond:function(){return vpData.certTipo&&vpData.certTipo!=='ninguna';}},
   {id:'plazo', label:'🗓️ ¿Cuándo te gustaría hacer el salto?', type:'pills', always:true,
    opts:[{v:'ya',l:'🚀 Ya! Lo antes posible'},{v:'1-2a',l:'📅 En 1-2 años'},{v:'explorando',l:'🔍 Explorando'},{v:'no_se',l:'🤷 No sé aún'}]},
-  {id:'inversion', label:'💰 Un proceso completo cuesta aprox. USD $10,000–$12,000. ¿Cómo te suena?', type:'pills', always:true,
+  {id:'inversion', label:'💰 Un proceso completo cuesta aprox. USD $10,000–$20,000. ¿Cómo te suena?', type:'pills', always:true,
    opts:[{v:'si',l:'✅ Tengo los recursos'},{v:'pronto',l:'⏳ Los junto en unos meses'},{v:'planificar',l:'😅 Necesito planificarlo'},{v:'no_decir',l:'Prefiero no decir'}]},
   {id:'decision', label:'🔥 Del 1 al 5, ¿qué tan decidido/a estás?', type:'scale', always:true,
    lblMin:'Solo curiosidad', lblMax:'¡All in! 🦘'},
@@ -2681,14 +2923,12 @@ function vpPostAnalysis(result){
       }).then(function(r){ console.log('[VIVA GHL] preevm_result_link guardado →', r); })
         .catch(function(e){ console.error('[VIVA GHL] Error en result_link upsert:', e); });
     }
-    // Mostrar resultado (siempre, con o sin URL)
-    if(viability==='no-apto'){vpShowNoApto(result);}
-    else{vpShowResult(result);}
+    // Mostrar pantalla de confirmación
+    vpShowReceived(result);
   }).catch(function(e){
     console.error('[VIVA] Error en save-result:', e);
-    // Mostrar resultado de todas formas
-    if(viability==='no-apto'){vpShowNoApto(result);}
-    else{vpShowResult(result);}
+    // Mostrar pantalla de confirmación de todas formas
+    vpShowReceived(result);
   });
 
   // ── 2) GHL upsert básico + tags + nota (independiente de save-result) ──
@@ -2718,6 +2958,15 @@ function vpPostAnalysis(result){
       vpApi('ghl-note',{contactId:contactId,body:nota}).catch(function(){});
     }
   }).catch(function(e){ console.warn('[VIVA GHL] Upsert básico falló (no bloquea el flujo):', e); });
+}
+
+// ══════════════════════════════════════════════════════
+// PANTALLA DE CONFIRMACIÓN: RESULTADO RECIBIDO
+// ══════════════════════════════════════════════════════
+function vpShowReceived(result){
+  var el=document.getElementById('vpReceivedNombre');
+  if(el) el.textContent=vpData.nombre||'';
+  vpGoScreen('s-received');
 }
 
 // ══════════════════════════════════════════════════════
