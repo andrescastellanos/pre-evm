@@ -811,11 +811,12 @@ function viva_render_user_result_page( $r ) {
     $prof      = esc_html( $r['prof'] ?? '' );
     $pais      = esc_html( $r['pais'] ?? '' );
     $edad      = esc_html( $r['edad'] ?? '' );
-    $eng       = esc_html( $r['eng']  ?? '' );
     $viability = $r['viability'] ?? 'no-apto';
-    $is_apto   = in_array( $viability, [ 'apto', 'parcial' ], true );
+    // Escenario A = apto | Escenario B = parcial | Escenario C = no-apto
+    $escenario_a = ( $viability === 'apto' );
+    $escenario_b = ( $viability === 'parcial' );
+    $escenario_c = ( $viability === 'no-apto' );
     $anzsco    = is_array( $r['anzsco']    ?? null ) ? $r['anzsco']    : [];
-    $visas     = is_array( $r['visas']     ?? null ) ? $r['visas']     : [];
     $variables = is_array( $r['variables'] ?? null ) ? $r['variables'] : [];
     $icons_map = [
         'cake'=>'🎂','speech'=>'🗣️','briefcase'=>'💼','clipboard'=>'📋','grad'=>'🎓',
@@ -825,133 +826,111 @@ function viva_render_user_result_page( $r ) {
     ?>
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Cormorant+Garamond:wght@400;600&display=swap');
-    /* Reset pointer-events bloqueados por temas WP */
+    /* Fix clickabilidad — algunos temas WP bloquean pointer-events en iframes y enlaces */
     .vpu a,.vpu iframe,.vpu button{pointer-events:auto!important;cursor:pointer!important}
-    .vpu{font-family:'Outfit',sans-serif;background:#07111F;color:#fff;padding:36px 20px;border-radius:16px;max-width:800px;margin:0 auto;line-height:1.6;position:relative;z-index:1}
+    .vpu{font-family:'Outfit',sans-serif;background:#07111F;color:#fff;padding:36px 20px;border-radius:16px;max-width:820px;margin:0 auto;line-height:1.6;position:relative;z-index:1}
     .vpu *{box-sizing:border-box}
-    /* Encabezado */
-    .vpu-header{text-align:center;margin-bottom:28px;padding-bottom:24px;border-bottom:1px solid rgba(255,255,255,.08)}
-    .vpu-logo{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;color:#E8600A;margin-bottom:4px;letter-spacing:.5px}
-    .vpu-subtitle{font-size:12px;color:#7A8EA8;text-transform:uppercase;letter-spacing:1px;margin-bottom:16px}
-    .vpu-name{font-size:26px;font-weight:700;margin:0 0 4px}
+    /* ── Logo / cabecera ── */
+    .vpu-header{text-align:center;margin-bottom:28px;padding-bottom:24px;border-bottom:2px solid rgba(232,96,10,.25)}
+    .vpu-logo{font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:600;color:#E8600A;margin-bottom:4px;letter-spacing:.5px}
+    .vpu-tagline{font-size:11px;color:#7A8EA8;text-transform:uppercase;letter-spacing:2px;margin-bottom:18px}
+    .vpu-name{font-size:28px;font-weight:700;margin:0 0 4px}
     .vpu-meta{font-size:13px;color:#7A8EA8}
-    /* Saludo */
-    .vpu-saludo{background:linear-gradient(135deg,rgba(232,96,10,.10),rgba(232,96,10,.04));border:1px solid rgba(232,96,10,.20);border-radius:14px;padding:22px 24px;margin-bottom:24px;font-size:14px;color:#E8600A;font-weight:600;line-height:1.75;text-align:center}
-    /* Info bloque encabezado informe */
-    .vpu-info-bloque{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:16px 20px;margin-bottom:24px;font-size:13px;color:rgba(255,255,255,.75);line-height:1.8}
-    .vpu-info-bloque strong{color:#fff}
-    .vpu-info-titulo{font-weight:700;font-size:14px;color:#fff;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px}
-    /* Aviso */
-    .vpu-disc{background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.18);border-radius:12px;padding:14px 16px;font-size:13px;color:rgba(255,255,255,.60);line-height:1.65;margin-bottom:24px}
-    /* No apto banner */
-    .vpu-no-apto{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:14px;padding:22px 24px;margin-bottom:24px;text-align:center}
-    .vpu-no-apto-ico{font-size:40px;margin-bottom:12px}
-    .vpu-no-apto-t{font-size:18px;font-weight:700;color:#F59E0B;margin-bottom:10px}
-    .vpu-no-apto-d{font-size:14px;color:rgba(255,255,255,.75);line-height:1.75}
-    /* Secciones */
-    .vpu-sec{margin-bottom:18px;padding:20px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:14px}
-    .vpu-sec-h{font-weight:700;font-size:15px;margin-bottom:12px;display:flex;align-items:center;gap:10px}
-    .vpu-sec-num{width:26px;height:26px;border-radius:50%;background:rgba(232,96,10,.15);border:1px solid rgba(232,96,10,.3);color:#E8600A;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;line-height:1}
-    .vpu-sec-body{font-size:14px;color:rgba(255,255,255,.75);line-height:1.75}
-    /* ANZSCO */
-    .vpu-az-item{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+    /* ── Saludo Escenario A ── */
+    .vpu-saludo{background:linear-gradient(135deg,rgba(232,96,10,.12),rgba(232,96,10,.04));border:1px solid rgba(232,96,10,.25);border-radius:14px;padding:24px 28px;margin-bottom:24px;font-size:15px;color:#E8600A;font-weight:600;line-height:1.8;text-align:center}
+    /* ── Bloque ID informe ── */
+    .vpu-id{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:18px 22px;margin-bottom:20px;font-size:13px;color:rgba(255,255,255,.75);line-height:1.9}
+    .vpu-id strong{color:#fff}
+    .vpu-id-titulo{font-weight:800;font-size:13px;color:#fff;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.07)}
+    .vpu-id-sub{font-size:12px;color:#E8600A;font-weight:600;margin-bottom:8px}
+    /* ── Secciones ── */
+    .vpu-sec{margin-bottom:16px;padding:20px 22px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07);border-radius:14px}
+    .vpu-sec-h{font-weight:700;font-size:15px;margin:0 0 14px;display:flex;align-items:center;gap:10px}
+    .vpu-sec-num{min-width:26px;height:26px;border-radius:50%;background:rgba(232,96,10,.15);border:1px solid rgba(232,96,10,.3);color:#E8600A;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;line-height:1}
+    .vpu-sec-body{font-size:14px;color:rgba(255,255,255,.78);line-height:1.8}
+    /* ── ANZSCO ── */
+    .vpu-az-intro{font-size:13px;color:#7A8EA8;font-style:italic;margin-bottom:14px}
+    .vpu-az-item{display:flex;align-items:flex-start;gap:14px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.05)}
     .vpu-az-item:last-child{border-bottom:none}
-    .vpu-az-code{background:rgba(232,96,10,.15);border:1px solid rgba(232,96,10,.3);color:#E8600A;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:700;white-space:nowrap;font-family:monospace}
-    .vpu-az-name{font-weight:600;font-size:14px}
-    .vpu-az-note{font-size:12px;color:#7A8EA8;margin-top:3px}
-    .vpu-az-label{font-size:12px;color:#7A8EA8;margin-bottom:14px;font-style:italic}
-    /* Tags visas */
-    .vpu-tag{display:inline-block;padding:5px 14px;border-radius:20px;font-size:13px;font-weight:600;margin:4px;background:rgba(15,190,124,.12);border:1px solid rgba(15,190,124,.3);color:#0FBE7C}
-    /* Variables */
-    .vpu-vari{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+    .vpu-az-code{background:rgba(232,96,10,.12);border:1px solid rgba(232,96,10,.28);color:#E8600A;padding:5px 11px;border-radius:6px;font-size:12px;font-weight:700;white-space:nowrap;font-family:monospace;flex-shrink:0}
+    .vpu-az-name{font-weight:700;font-size:14px;margin-bottom:2px}
+    .vpu-az-note{font-size:12px;color:#7A8EA8}
+    /* ── Variables competitividad ── */
+    .vpu-vari{display:flex;align-items:flex-start;gap:13px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.05)}
     .vpu-vari:last-child{border-bottom:none}
-    .vpu-vari-ico{width:34px;height:34px;border-radius:10px;background:rgba(232,96,10,.1);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
-    .vpu-vari-t{font-weight:600;font-size:14px}
-    .vpu-vari-d{font-size:13px;color:#7A8EA8;margin-top:2px}
-    /* EVM sección */
-    .vpu-evm-body{font-size:14px;color:rgba(255,255,255,.75);line-height:1.75}
-    /* Video — sin overflow:hidden para no bloquear interacción */
-    .vpu-video{margin-top:16px;border-radius:10px;aspect-ratio:16/9;background:#000;position:relative;z-index:2}
+    .vpu-vari-ico{width:36px;height:36px;border-radius:10px;background:rgba(232,96,10,.08);border:1px solid rgba(232,96,10,.15);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+    .vpu-vari-t{font-weight:700;font-size:14px;margin-bottom:2px}
+    .vpu-vari-d{font-size:13px;color:rgba(255,255,255,.62)}
+    /* ── Video ── */
+    .vpu-video{margin-top:18px;border-radius:10px;aspect-ratio:16/9;background:#000;position:relative;z-index:2}
     .vpu-video iframe{width:100%;height:100%;border:none;border-radius:10px;display:block;pointer-events:auto!important}
-    /* Honorarios */
-    .vpu-honorarios{background:rgba(15,190,124,.06);border:1px solid rgba(15,190,124,.18);border-radius:12px;padding:16px 20px;margin-top:12px}
-    .vpu-honor-precio{font-size:28px;font-weight:700;color:#0FBE7C;margin-bottom:6px}
-    .vpu-honor-desc{font-size:13px;color:rgba(255,255,255,.70);line-height:1.65}
-    .vpu-honor-nota{font-size:12px;color:#7A8EA8;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)}
-    /* CTA botón */
-    .vpu-cta{text-align:center;margin-top:24px;padding:28px 24px;background:linear-gradient(135deg,rgba(232,96,10,.12),rgba(232,96,10,.05));border:1px solid rgba(232,96,10,.22);border-radius:16px}
+    /* ── Honorarios ── */
+    .vpu-honor-box{background:rgba(15,190,124,.05);border:1px solid rgba(15,190,124,.20);border-radius:12px;padding:18px 20px;margin-top:14px}
+    .vpu-honor-precio{font-size:30px;font-weight:800;color:#0FBE7C;margin-bottom:6px}
+    .vpu-honor-desc{font-size:13px;color:rgba(255,255,255,.70);line-height:1.7}
+    /* ── Disclaimer (texto exacto de instrucciones.md) ── */
+    .vpu-disclaimer{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:18px 20px;margin-top:20px;font-size:12px;color:rgba(255,255,255,.50);line-height:1.75}
+    .vpu-disclaimer strong{color:rgba(255,255,255,.70)}
+    /* ── CTA ── */
+    .vpu-cta{text-align:center;margin-top:24px;padding:28px 24px;background:linear-gradient(135deg,rgba(232,96,10,.12),rgba(232,96,10,.04));border:1px solid rgba(232,96,10,.22);border-radius:16px}
     .vpu-cta h3{font-size:20px;font-weight:700;margin:0 0 10px;color:#fff}
-    .vpu-cta p{font-size:14px;color:rgba(255,255,255,.70);margin:0 0 20px;line-height:1.65}
+    .vpu-cta p{font-size:14px;color:rgba(255,255,255,.68);margin:0 0 20px;line-height:1.65}
     .vpu-btn-wrap{display:block;text-align:center;position:relative;z-index:10}
-    .vpu-btn-primary{display:inline-block!important;background:#E8600A!important;color:#fff!important;font-weight:700!important;font-size:15px!important;padding:14px 32px!important;border-radius:10px!important;text-decoration:none!important;cursor:pointer!important;border:none!important;position:relative!important;z-index:10!important;pointer-events:auto!important}
-    .vpu-btn-primary:hover{background:#d4550a!important;color:#fff!important}
-    /* Footer */
-    .vpu-footer{text-align:center;padding:20px 0 0;color:#4A5E78;font-size:12px;border-top:1px solid rgba(255,255,255,.06);margin-top:24px;line-height:1.7}
-    @media(max-width:600px){.vpu{padding:20px 14px}}
+    .vpu-btn{display:inline-block!important;background:#E8600A!important;color:#fff!important;font-weight:700!important;font-size:15px!important;padding:15px 34px!important;border-radius:10px!important;text-decoration:none!important;cursor:pointer!important;border:none!important;position:relative!important;z-index:10!important;pointer-events:auto!important;line-height:1!important}
+    .vpu-btn:hover{background:#d4550a!important;color:#fff!important}
+    /* ── Escenario B/C ── */
+    .vpu-cond-box{background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.22);border-radius:14px;padding:22px 24px;margin-bottom:22px}
+    .vpu-cond-t{font-size:17px;font-weight:700;color:#F59E0B;margin-bottom:10px}
+    .vpu-cond-d{font-size:14px;color:rgba(255,255,255,.75);line-height:1.8}
+    .vpu-close-box{background:rgba(100,116,139,.06);border:1px solid rgba(100,116,139,.18);border-radius:14px;padding:22px 24px;margin-bottom:22px}
+    .vpu-close-t{font-size:17px;font-weight:700;color:#94A3B8;margin-bottom:10px}
+    .vpu-close-d{font-size:14px;color:rgba(255,255,255,.70);line-height:1.8}
+    @media(max-width:600px){.vpu{padding:20px 14px}.vpu-saludo{padding:18px 16px}}
     </style>
 
     <div class="vpu">
 
-      <!-- ── Encabezado ── -->
+      <!-- ══ CABECERA LOGO ══ -->
       <div class="vpu-header">
-        <div class="vpu-logo">Viva Australia Internacional</div>
-        <div class="vpu-subtitle">Informe Preliminar de Evaluación de Viabilidad Migratoria</div>
+        <div class="vpu-logo">&#x2713; Viva Australia Internacional</div>
+        <div class="vpu-tagline">Informe Preliminar &middot; Evaluaci&oacute;n de Viabilidad Migratoria</div>
         <div class="vpu-name"><?php echo $nom . ' ' . $ape; ?></div>
         <?php if ( $prof || $pais ) : ?>
-        <div class="vpu-meta"><?php echo implode( ' · ', array_filter( [ $prof, $pais ] ) ); ?></div>
+        <div class="vpu-meta"><?php echo implode( ' &middot; ', array_filter( [ $prof, $pais ] ) ); ?></div>
         <?php endif; ?>
       </div>
 
-      <?php if ( $is_apto ) : ?>
+      <?php if ( $escenario_a ) : ?>
+      <!-- ════════════════════════════════════════════
+           ESCENARIO A — BASE JURÍDICA PLAUSIBLE
+           Informe completo 7 secciones
+      ════════════════════════════════════════════ -->
 
-      <!-- ── Saludo personalizado (perfil apto/parcial) ── -->
+      <!-- Saludo personalizado (solo Escenario A, según instrucciones.md) -->
       <div class="vpu-saludo">
-        ¡Felicidades <?php echo $nom; ?>! Es un placer saludarte y reconocer la trayectoria que has consolidado<?php echo $prof ? ' en el área de <strong>' . $prof . '</strong>' : ''; ?>.
-        Tu perfil presenta elementos que podrían ser estratégicamente relevantes para el sistema de migración calificada de Australia.
-        A continuación encontrarás un análisis preliminar basado en los datos que nos compartiste.
+        &iexcl;Felicidades <?php echo $nom; ?>!
+        Es un placer saludarte y reconocer la s&oacute;lida trayectoria que has consolidado<?php echo $prof ? ' en el &aacute;rea de <strong>' . $prof . '</strong>' : ''; ?>.
+        La combinaci&oacute;n de tu formaci&oacute;n y experiencia representa un valor competitivo que, bas&aacute;ndonos en los datos proporcionados,
+        presenta elementos estratégicamente relevantes para el sistema de migración calificada de Australia.
+        A continuaci&oacute;n encontrar&aacute;s el informe preliminar de an&aacute;lisis de tu perfil.
       </div>
 
-      <!-- ── Bloque info informe ── -->
-      <div class="vpu-info-bloque">
-        <div class="vpu-info-titulo">Informe Preliminar de Análisis de Perfil</div>
-        <strong>Programa:</strong> Migración Calificada de Australia (Skilled Migration Programme)<br>
+      <!-- Bloque de identificación del informe -->
+      <div class="vpu-id">
+        <div class="vpu-id-titulo">Informe Preliminar de An&aacute;lisis de Perfil</div>
+        <div class="vpu-id-sub">Programa de Migraci&oacute;n Calificada de Australia (Skilled Migration Programme)</div>
         <strong>Candidato:</strong> <?php echo $nom . ' ' . $ape; ?><br>
         <?php if ( $pais ) : ?><strong>Nacionalidad:</strong> <?php echo $pais; ?><br><?php endif; ?>
-        <?php if ( $edad ) : ?><strong>Edad:</strong> <?php echo $edad; ?> años<br><?php endif; ?>
-        <?php if ( $prof ) : ?><strong>Perfil profesional:</strong> <?php echo $prof; ?><br><?php endif; ?>
-        <strong>Carácter:</strong> Informe técnico preliminar – orientativo
+        <?php if ( $edad ) : ?>
+        <strong>Edad:</strong> <?php echo $edad; ?> a&ntilde;os<br>
+        <?php else : ?>
+        <strong>Edad:</strong> No informada en la documentaci&oacute;n recibida. Este dato es determinante dentro del sistema por puntos y deber&aacute; confirmarse para completar el an&aacute;lisis t&eacute;cnico.<br>
+        <?php endif; ?>
+        <?php if ( $prof ) : ?><strong>Perfil Profesional:</strong> <?php echo $prof; ?><br><?php endif; ?>
+        <strong>Car&aacute;cter:</strong> Informe t&eacute;cnico preliminar &ndash; orientativo
       </div>
 
-      <?php else : ?>
-
-      <!-- ── Banner no apto ── -->
-      <div class="vpu-no-apto">
-        <div class="vpu-no-apto-ico">📋</div>
-        <div class="vpu-no-apto-t">Perfil con áreas a fortalecer</div>
-        <div class="vpu-no-apto-d">
-          Hola <?php echo $nom; ?>, hemos revisado tu información y, al menos con los datos disponibles en esta etapa,
-          tu perfil presenta algunas áreas que podrían requerir fortalecimiento antes de iniciar un proceso migratorio formal hacia Australia.
-          <br><br>
-          Esto no significa una respuesta definitiva. Un consultor migratorio registrado (MARA) podría identificar
-          vías o estrategias que este análisis preliminar no contempla. Te recomendamos una consulta directa con nuestro equipo.
-        </div>
-      </div>
-
-      <!-- ── Bloque info informe (no apto) ── -->
-      <div class="vpu-info-bloque">
-        <div class="vpu-info-titulo">Informe Preliminar de Análisis de Perfil</div>
-        <strong>Candidato:</strong> <?php echo $nom . ' ' . $ape; ?><br>
-        <?php if ( $pais ) : ?><strong>Nacionalidad:</strong> <?php echo $pais; ?><br><?php endif; ?>
-        <?php if ( $prof ) : ?><strong>Perfil profesional:</strong> <?php echo $prof; ?><br><?php endif; ?>
-        <strong>Carácter:</strong> Informe técnico preliminar – orientativo
-      </div>
-
-      <?php endif; ?>
-
-      <!-- ── Aviso legal ── -->
-      <div class="vpu-disc">⚠️ Este informe es de carácter orientativo y se basa exclusivamente en los datos declarados. No constituye asesoramiento migratorio formal. Solo un consultor migratorio registrado (MARA) puede confirmar elegibilidad bajo la Migration Act 1958 (Cth). Los indicadores presentados podrían variar según documentación real.</div>
-
-      <!-- ── 1. Naturaleza y alcance ── -->
+      <!-- 1. Naturaleza y alcance -->
       <?php if ( ! empty( $r['alcance'] ) ) : ?>
       <div class="vpu-sec">
         <div class="vpu-sec-h"><div class="vpu-sec-num">1</div>Naturaleza y alcance del informe</div>
@@ -959,27 +938,32 @@ function viva_render_user_result_page( $r ) {
       </div>
       <?php endif; ?>
 
-      <!-- ── 2. Análisis académico ── -->
+      <!-- 2. Análisis académico detallado -->
       <?php if ( ! empty( $r['academico'] ) ) : ?>
       <div class="vpu-sec">
-        <div class="vpu-sec-h"><div class="vpu-sec-num">2</div>Análisis académico detallado</div>
+        <div class="vpu-sec-h"><div class="vpu-sec-num">2</div>An&aacute;lisis acad&eacute;mico detallado</div>
         <div class="vpu-sec-body"><?php echo esc_html( $r['academico'] ); ?></div>
       </div>
       <?php endif; ?>
 
-      <!-- ── 3. Análisis laboral ── -->
+      <!-- 3. Análisis laboral desarrollado -->
       <?php if ( ! empty( $r['laboral'] ) ) : ?>
       <div class="vpu-sec">
-        <div class="vpu-sec-h"><div class="vpu-sec-num">3</div>Análisis laboral desarrollado</div>
+        <div class="vpu-sec-h"><div class="vpu-sec-num">3</div>An&aacute;lisis laboral desarrollado</div>
         <div class="vpu-sec-body"><?php echo esc_html( $r['laboral'] ); ?></div>
       </div>
       <?php endif; ?>
 
-      <!-- ── 4. Marco regulatorio y ANZSCO ── -->
+      <!-- 4. Marco regulatorio y ocupacional -->
       <?php if ( ! empty( $anzsco ) ) : ?>
       <div class="vpu-sec">
         <div class="vpu-sec-h"><div class="vpu-sec-num">4</div>Marco regulatorio y ocupacional</div>
-        <div class="vpu-az-label">Posibles ANZSCO (orientativos, no definitivos en esta fase):</div>
+        <div class="vpu-sec-body" style="margin-bottom:14px">
+          El sistema migratorio australiano utiliza la clasificaci&oacute;n ANZSCO para identificar ocupaciones calificadas.
+          Para validar la experiencia, el sistema requiere un <em>Skills Assessment</em> (Evaluaci&oacute;n de Habilidades)
+          emitido por autoridades competentes, donde se verificar&aacute; la equivalencia de estudios y a&ntilde;os de experiencia.
+        </div>
+        <p class="vpu-az-intro">Posibles ANZSCO (orientativos, no definitivos en esta fase):</p>
         <?php foreach ( $anzsco as $a ) : ?>
         <div class="vpu-az-item">
           <span class="vpu-az-code"><?php echo esc_html( $a['code'] ?? '' ); ?></span>
@@ -994,9 +978,7 @@ function viva_render_user_result_page( $r ) {
       </div>
       <?php endif; ?>
 
-      <?php if ( $is_apto ) : ?>
-
-      <!-- ── 5. Variables de competitividad (solo apto/parcial) ── -->
+      <!-- 5. Variables de competitividad a revisar -->
       <?php if ( ! empty( $variables ) ) : ?>
       <div class="vpu-sec">
         <div class="vpu-sec-h"><div class="vpu-sec-num">5</div>Variables de competitividad a revisar</div>
@@ -1014,14 +996,15 @@ function viva_render_user_result_page( $r ) {
       </div>
       <?php endif; ?>
 
-      <!-- ── 6. Definición EVM + video ── -->
+      <!-- 6. Definición de la EVM + video -->
       <div class="vpu-sec">
-        <div class="vpu-sec-h"><div class="vpu-sec-num">6</div>Definición de la Evaluación de Viabilidad Migratoria (EVM)</div>
-        <div class="vpu-evm-body">
-          La EVM es un análisis técnico-jurídico profundo realizado por nuestro Agente Migratorio Registrado.
+        <div class="vpu-sec-h"><div class="vpu-sec-num">6</div>Definici&oacute;n de la Evaluaci&oacute;n de Viabilidad Migratoria (EVM)</div>
+        <div class="vpu-sec-body">
+          La EVM es un an&aacute;lisis t&eacute;cnico-jur&iacute;dico profundo realizado por nuestro Agente Migratorio Registrado.
           En ella se define la estrategia legal exacta, se calcula el puntaje real, se identifican los riesgos normativos
-          y se establece una hoja de ruta con tiempos y costos totales del proceso.
-          Solo se recomienda cuando, como en tu caso, existe una base jurídica real para avanzar.
+          (incluyendo an&aacute;lisis de antecedentes y situaciones que puedan impactar futuras solicitudes) y se establece
+          una hoja de ruta con tiempos y costos totales del proceso. Solo se recomienda cuando, como en tu caso,
+          existe una base jur&iacute;dica real para avanzar.
         </div>
         <div class="vpu-video">
           <iframe
@@ -1029,81 +1012,221 @@ function viva_render_user_result_page( $r ) {
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowfullscreen
             loading="lazy"
-            title="¿Qué es la EVM? — Viva Australia"
+            title="&iquest;Qu&eacute; es la EVM? &mdash; Viva Australia"
           ></iframe>
         </div>
       </div>
 
-      <!-- ── 7. Honorarios y condición comercial ── -->
+      <!-- 7. Honorarios y condición comercial -->
       <div class="vpu-sec">
-        <div class="vpu-sec-h"><div class="vpu-sec-num">7</div>Honorarios y condición comercial</div>
-        <div class="vpu-honorarios">
+        <div class="vpu-sec-h"><div class="vpu-sec-num">7</div>Honorarios y condici&oacute;n comercial</div>
+        <div class="vpu-honor-box">
           <div class="vpu-honor-precio">USD 270</div>
           <div class="vpu-honor-desc">
-            Valor estándar oficial de la Evaluación de Viabilidad Migratoria (EVM).<br>
-            Si decides iniciar tu proceso formal dentro de los <strong>30 días</strong> posteriores a la entrega de la EVM,
-            el valor pagado se descuenta del total de honorarios profesionales.
+            Valor est&aacute;ndar oficial de la Evaluaci&oacute;n de Viabilidad Migratoria (EVM).<br>
+            Si decides iniciar tu proceso formal dentro de los <strong>30 d&iacute;as</strong> posteriores
+            a la entrega de la EVM, el valor pagado se descuenta del total de honorarios profesionales.
           </div>
-        </div>
-        <div class="vpu-honor-nota">
-          <strong>Validación profesional:</strong> Esta información ha sido revisada bajo los estándares de análisis de perfil
-          utilizados por Viva Australia Internacional por nuestro Agente Migratorio Senior Registrado
-          <strong>Frank Cross (MARN 0101111)</strong>, certificado por la Migration Agents Registration Authority (MARA) de Australia.
         </div>
       </div>
 
-      <!-- ── CTA Stripe ── -->
+      <!-- Disclaimer profesional obligatorio (texto exacto de instrucciones.md) -->
+      <div class="vpu-disclaimer">
+        <strong>Validaci&oacute;n profesional:</strong> Esta informaci&oacute;n ha sido revisada bajo los est&aacute;ndares de an&aacute;lisis de perfil utilizados por Viva Australia Internacional por nuestro Agente Migratorio Senior Registrado Frank Cross (MARN 0101111), certificado por la Migration Agents Registration Authority (MARA) de Australia.<br><br>
+        El presente mensaje se basa exclusivamente en la informaci&oacute;n contenida en tu CV o perfil profesional compartido durante esta conversaci&oacute;n.<br><br>
+        Este an&aacute;lisis tiene car&aacute;cter preliminar, informativo y orientativo, y no constituye asesor&iacute;a migratoria formal ni recomendaci&oacute;n migratoria personalizada.<br><br>
+        Para recibir orientaci&oacute;n migratoria espec&iacute;fica, estrat&eacute;gica y ajustada a tu caso particular, es necesario formalizar un proceso de contrataci&oacute;n profesional con Viva Australia Internacional conforme a la normativa migratoria australiana aplicable.<br><br>
+        En otras palabras, este mensaje representa &uacute;nicamente un an&aacute;lisis inicial de tu perfil profesional basado en la informaci&oacute;n disponible, y no debe interpretarse como un consejo migratorio definitivo. La asesor&iacute;a migratoria detallada, personalizada y jur&iacute;dicamente aplicable solo puede proporcionarse dentro de un proceso formal de evaluaci&oacute;n profesional.
+      </div>
+
+      <!-- CTA — Solicitar EVM (solo Escenario A) -->
       <div class="vpu-cta">
-        <h3>¿Quieres dar el siguiente paso?</h3>
-        <p>Si los indicadores de tu perfil te generan interés, el siguiente paso es la Evaluación Migratoria con uno de nuestros consultores MARA. Analizaremos tu caso en detalle y te orientaremos de manera personalizada.</p>
+        <h3>&iquest;Quieres dar el siguiente paso?</h3>
+        <p>El siguiente paso es la Evaluaci&oacute;n de Viabilidad Migratoria con uno de nuestros consultores MARA registrados. Sin la EVM no se define estrategia ni costos finales del proceso.</p>
         <div class="vpu-btn-wrap">
-          <a class="vpu-btn-primary" href="https://buy.stripe.com/9AQ8xq7zw4FG5rOeUW" target="_blank" rel="noopener noreferrer">
-            Solicitar mi Evaluación Migratoria →
+          <a class="vpu-btn" href="https://buy.stripe.com/9AQ8xq7zw4FG5rOeUW" target="_blank" rel="noopener noreferrer">
+            Solicitar mi Evaluaci&oacute;n Migratoria &rarr;
           </a>
         </div>
       </div>
 
-      <?php else : /* no-apto — CTA a consulta directa */ ?>
+      <?php elseif ( $escenario_b ) : ?>
+      <!-- ════════════════════════════════════════════
+           ESCENARIO B — BASE JURÍDICA CONDICIONADA
+           Análisis parcial, sin informe completo ni "¡Felicidades!"
+      ════════════════════════════════════════════ -->
 
-      <!-- ── EVM para no apto ── -->
+      <!-- Banner base condicionada -->
+      <div class="vpu-cond-box">
+        <div class="vpu-cond-t">&#x1F4CB; An&aacute;lisis de perfil &mdash; Base condicionada</div>
+        <div class="vpu-cond-d">
+          Hola <?php echo $nom; ?>, hemos revisado la informaci&oacute;n disponible de tu perfil. Con los datos actuales,
+          identificamos algunos elementos con potencial migratorio, aunque existen factores que requerir&iacute;an validaci&oacute;n m&aacute;s profunda
+          antes de poder determinar una ruta concreta.<br><br>
+          En esta etapa, una Evaluaci&oacute;n de Viabilidad Migratoria (EVM) podr&iacute;a ser &uacute;til como an&aacute;lisis estrat&eacute;gico
+          para identificar si existen v&iacute;as indirectas o alternativas que requieran un an&aacute;lisis profesional m&aacute;s detallado.
+        </div>
+      </div>
+
+      <!-- Bloque ID (sin título de informe formal) -->
+      <div class="vpu-id">
+        <strong>Candidato:</strong> <?php echo $nom . ' ' . $ape; ?><br>
+        <?php if ( $pais ) : ?><strong>Nacionalidad:</strong> <?php echo $pais; ?><br><?php endif; ?>
+        <?php if ( $prof ) : ?><strong>Perfil Profesional:</strong> <?php echo $prof; ?><br><?php endif; ?>
+        <strong>Car&aacute;cter:</strong> An&aacute;lisis preliminar orientativo &ndash; base condicionada
+      </div>
+
+      <!-- 1. Alcance -->
+      <?php if ( ! empty( $r['alcance'] ) ) : ?>
       <div class="vpu-sec">
-        <div class="vpu-sec-h"><div class="vpu-sec-num">5</div>¿Qué significa este resultado?</div>
-        <div class="vpu-evm-body">
-          Este análisis preliminar identifica que, con los datos disponibles actualmente, podrían existir factores limitantes
-          para un proceso de migración calificada en Australia. Sin embargo, los sistemas migratorios son complejos y existen
-          múltiples vías que este análisis no puede contemplar en su totalidad.<br><br>
-          Una Evaluación de Viabilidad Migratoria (EVM) con un consultor MARA registrado te permitirá conocer con precisión
-          qué opciones reales tienes, qué áreas trabajar y cuáles podrían ser tus plazos realistas.
+        <div class="vpu-sec-h"><div class="vpu-sec-num">1</div>Naturaleza y alcance del an&aacute;lisis</div>
+        <div class="vpu-sec-body"><?php echo esc_html( $r['alcance'] ); ?></div>
+      </div>
+      <?php endif; ?>
+
+      <!-- 2. Académico -->
+      <?php if ( ! empty( $r['academico'] ) ) : ?>
+      <div class="vpu-sec">
+        <div class="vpu-sec-h"><div class="vpu-sec-num">2</div>An&aacute;lisis acad&eacute;mico</div>
+        <div class="vpu-sec-body"><?php echo esc_html( $r['academico'] ); ?></div>
+      </div>
+      <?php endif; ?>
+
+      <!-- 3. Laboral -->
+      <?php if ( ! empty( $r['laboral'] ) ) : ?>
+      <div class="vpu-sec">
+        <div class="vpu-sec-h"><div class="vpu-sec-num">3</div>An&aacute;lisis laboral</div>
+        <div class="vpu-sec-body"><?php echo esc_html( $r['laboral'] ); ?></div>
+      </div>
+      <?php endif; ?>
+
+      <!-- 4. ANZSCO orientativo (si los hay) -->
+      <?php if ( ! empty( $anzsco ) ) : ?>
+      <div class="vpu-sec">
+        <div class="vpu-sec-h"><div class="vpu-sec-num">4</div>Marco ocupacional</div>
+        <p class="vpu-az-intro">Posibles ocupaciones ANZSCO identificadas (orientativas, no definitivas en esta fase):</p>
+        <?php foreach ( $anzsco as $a ) : ?>
+        <div class="vpu-az-item">
+          <span class="vpu-az-code"><?php echo esc_html( $a['code'] ?? '' ); ?></span>
+          <div>
+            <div class="vpu-az-name"><?php echo esc_html( $a['name'] ?? '' ); ?></div>
+            <?php if ( ! empty( $a['note'] ) ) : ?>
+            <div class="vpu-az-note"><?php echo esc_html( $a['note'] ); ?></div>
+            <?php endif; ?>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+      <?php endif; ?>
+
+      <!-- EVM + video -->
+      <div class="vpu-sec">
+        <div class="vpu-sec-h">&#x1F4CB; &iquest;Qu&eacute; es la Evaluaci&oacute;n de Viabilidad Migratoria (EVM)?</div>
+        <div class="vpu-sec-body">
+          La EVM es un an&aacute;lisis t&eacute;cnico-jur&iacute;dico profundo realizado por un consultor MARA registrado.
+          En casos como el tuyo, donde existen variables que requieren validaci&oacute;n adicional, la EVM podr&iacute;a identificar
+          si existe una v&iacute;a estrat&eacute;gica &mdash;directa o indirecta&mdash; que justifique iniciar un proceso formal.
+          Sin la EVM no es posible determinar con certeza ni estrategia ni costos finales.
         </div>
         <div class="vpu-video">
           <iframe
             src="https://www.youtube.com/embed/_SG7tg6SUEk"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowfullscreen
-            loading="lazy"
-            title="¿Qué es la EVM? — Viva Australia"
+            allowfullscreen loading="lazy"
+            title="&iquest;Qu&eacute; es la EVM? &mdash; Viva Australia"
           ></iframe>
         </div>
       </div>
 
+      <!-- Honorarios (condicional) -->
+      <div class="vpu-sec">
+        <div class="vpu-sec-h">&#x1F4B3; Honorarios y condici&oacute;n comercial</div>
+        <div class="vpu-honor-box">
+          <div class="vpu-honor-precio">USD 270</div>
+          <div class="vpu-honor-desc">
+            Valor est&aacute;ndar de la Evaluaci&oacute;n de Viabilidad Migratoria (EVM).<br>
+            Si decides iniciar tu proceso formal dentro de los <strong>30 d&iacute;as</strong>, el valor se descuenta de los honorarios profesionales.
+          </div>
+        </div>
+      </div>
+
+      <!-- Disclaimer -->
+      <div class="vpu-disclaimer">
+        <strong>Validaci&oacute;n profesional:</strong> Esta informaci&oacute;n ha sido revisada bajo los est&aacute;ndares de an&aacute;lisis de perfil utilizados por Viva Australia Internacional por nuestro Agente Migratorio Senior Registrado Frank Cross (MARN 0101111), certificado por la Migration Agents Registration Authority (MARA) de Australia.<br><br>
+        El presente mensaje se basa exclusivamente en la informaci&oacute;n contenida en tu CV o perfil profesional compartido. Este an&aacute;lisis tiene car&aacute;cter preliminar, informativo y orientativo, y no constituye asesor&iacute;a migratoria formal ni recomendaci&oacute;n migratoria personalizada. Para recibir orientaci&oacute;n migratoria espec&iacute;fica y ajustada a tu caso es necesario formalizar un proceso de contrataci&oacute;n profesional con Viva Australia Internacional.
+      </div>
+
+      <!-- CTA suave (Escenario B) -->
       <div class="vpu-cta">
-        <h3>Hablemos antes de concluir</h3>
-        <p>Nuestro equipo puede orientarte sobre si existen vías alternativas o estrategias de preparación para mejorar tu perfil a futuro. Una conversación con un consultor podría cambiar el panorama.</p>
+        <h3>&iquest;Quieres que analicemos tu caso en profundidad?</h3>
+        <p>La EVM puede determinar si existe una v&iacute;a &mdash;directa o estrat&eacute;gica&mdash; que justifique avanzar. Sin este an&aacute;lisis no es posible confirmar ni descartar opciones con rigor t&eacute;cnico.</p>
         <div class="vpu-btn-wrap">
-          <a class="vpu-btn-primary" href="https://buy.stripe.com/9AQ8xq7zw4FG5rOeUW" target="_blank" rel="noopener noreferrer">
-            Hablar con un consultor →
+          <a class="vpu-btn" href="https://buy.stripe.com/9AQ8xq7zw4FG5rOeUW" target="_blank" rel="noopener noreferrer">
+            Solicitar Evaluaci&oacute;n Migratoria &rarr;
           </a>
         </div>
+      </div>
+
+      <?php else : ?>
+      <!-- ════════════════════════════════════════════
+           ESCENARIO C — SIN BASE JURÍDICA
+           Cierre honesto. Sin venta, sin recomendaciones, sin informe.
+      ════════════════════════════════════════════ -->
+
+      <!-- Cierre honesto -->
+      <div class="vpu-close-box">
+        <div class="vpu-close-t">&#x1F4CB; Resultado del an&aacute;lisis preliminar</div>
+        <div class="vpu-close-d">
+          Hola <?php echo $nom; ?>, agradecemos que hayas compartido tu informaci&oacute;n con nosotros.<br><br>
+          Con la informaci&oacute;n disponible, en Viva Australia no identificamos actualmente una base jur&iacute;dica suficiente
+          para recomendar iniciar un proceso migratorio bajo el programa de migraci&oacute;n calificada de Australia,
+          ni consideramos responsable invitarte a invertir en una Evaluaci&oacute;n de Viabilidad Migratoria en este momento.<br><br>
+          Esto no significa que sea imposible, sino que con los datos actuales no identificamos una base objetiva
+          que haga razonable el gasto en dicha evaluaci&oacute;n. Si en el futuro tu situaci&oacute;n cambia,
+          con gusto revisamos nuevamente tu perfil.
+        </div>
+      </div>
+
+      <!-- Bloque ID básico -->
+      <div class="vpu-id">
+        <strong>Candidato:</strong> <?php echo $nom . ' ' . $ape; ?><br>
+        <?php if ( $pais ) : ?><strong>Nacionalidad:</strong> <?php echo $pais; ?><br><?php endif; ?>
+        <?php if ( $prof ) : ?><strong>Perfil:</strong> <?php echo $prof; ?><br><?php endif; ?>
+        <strong>Car&aacute;cter:</strong> An&aacute;lisis preliminar &ndash; no procede EVM en esta etapa
+      </div>
+
+      <!-- Alcance (si existe) -->
+      <?php if ( ! empty( $r['alcance'] ) ) : ?>
+      <div class="vpu-sec">
+        <div class="vpu-sec-h">Naturaleza y alcance del an&aacute;lisis</div>
+        <div class="vpu-sec-body"><?php echo esc_html( $r['alcance'] ); ?></div>
+      </div>
+      <?php endif; ?>
+
+      <!-- Video educativo (qué es EVM, para contexto) -->
+      <div class="vpu-sec">
+        <div class="vpu-sec-h">&#x1F4FA; &iquest;Qu&eacute; es la Evaluaci&oacute;n de Viabilidad Migratoria?</div>
+        <div class="vpu-sec-body" style="margin-bottom:14px">
+          Para que entiendas qu&eacute; es lo que determinamos en este proceso y por qu&eacute; nuestro enfoque es el de ventas seguras,
+          te compartimos este video explicativo.
+        </div>
+        <div class="vpu-video">
+          <iframe
+            src="https://www.youtube.com/embed/_SG7tg6SUEk"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowfullscreen loading="lazy"
+            title="&iquest;Qu&eacute; es la EVM? &mdash; Viva Australia"
+          ></iframe>
+        </div>
+      </div>
+
+      <!-- Disclaimer -->
+      <div class="vpu-disclaimer">
+        <strong>Validaci&oacute;n profesional:</strong> Esta informaci&oacute;n ha sido revisada bajo los est&aacute;ndares de an&aacute;lisis de perfil utilizados por Viva Australia Internacional por nuestro Agente Migratorio Senior Registrado Frank Cross (MARN 0101111), certificado por la Migration Agents Registration Authority (MARA) de Australia.<br><br>
+        El presente mensaje se basa exclusivamente en la informaci&oacute;n contenida en tu CV o perfil profesional compartido. Este an&aacute;lisis tiene car&aacute;cter preliminar, informativo y orientativo, y no constituye asesor&iacute;a migratoria formal ni recomendaci&oacute;n migratoria personalizada. La asesor&iacute;a migratoria detallada solo puede proporcionarse dentro de un proceso formal de evaluaci&oacute;n profesional.
       </div>
 
       <?php endif; ?>
-
-      <!-- ── Footer ── -->
-      <div class="vpu-footer">
-        Informe orientativo &mdash; Viva Australia Internacional<br>
-        Frank Cross, Senior Migration Agent · MARA 0101111<br>
-        Este documento no constituye asesoramiento migratorio formal bajo la Migration Act 1958 (Cth).
-      </div>
 
     </div>
     <?php
