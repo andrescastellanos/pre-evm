@@ -29,7 +29,7 @@ jobs:
           security: loose
           server-dir: /public_html/wp-content/plugins/viva-pre-evm/
           local-dir: ./
-          timeout: 300000
+          timeout: 900000
           exclude: |
             **/.git*
             **/.git*/**
@@ -48,7 +48,7 @@ jobs:
           security: loose
           server-dir: /public_html/wp-content/plugins/viva-pre-evm/
           local-dir: ./
-          timeout: 300000
+          timeout: 900000
           exclude: |
             **/.git*
             **/.git*/**
