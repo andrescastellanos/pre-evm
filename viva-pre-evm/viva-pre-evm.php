@@ -2118,7 +2118,9 @@ function viva_build_user_message( WP_REST_Request $req ) {
 // wp_staticize_emoji corrompa los pares surrogados UTF-16
 // ═══════════════════════════════════════════════════════════════
 function viva_preevm_escape_js_emoji( string $js ): string {
-    return preg_replace_callback(
+    // PASO 1 — Convierte emojis > U+FFFF a pares surrogados \uXXXX\uYYYY
+    // para que wp_staticize_emoji no corrompa los caracteres dentro de <script>
+    $js = preg_replace_callback(
         '/[\x{10000}-\x{10FFFF}]/u',
         function( array $m ): string {
             $cp   = mb_ord( $m[0], 'UTF-8' );
@@ -2128,6 +2130,19 @@ function viva_preevm_escape_js_emoji( string $js ): string {
         },
         $js
     );
+
+    // PASO 2 — Escapa saltos de línea literales dentro de strings JS con comilla simple
+    // PHP HEREDOC convierte \n del fuente en chr(10). Ese chr(10) dentro de un
+    // string JS 'texto...' produce SyntaxError: Invalid or unexpected token
+    $js = preg_replace_callback(
+        "/'[^'\\\\]*(?:\\\\.[^'\\\\]*)*'/s",
+        function( array $m ): string {
+            return str_replace( "\n", '\n', str_replace( "\r\n", '\n', $m[0] ) );
+        },
+        $js
+    );
+
+    return $js;
 }
 
 // ═══════════════════════════════════════════════════════════════
