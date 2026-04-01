@@ -1,0 +1,56 @@
+name: Deploy to FTP
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Upload to Hostinger via FTP
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Deploy con FTP (intento 1)
+        id: ftp1
+        continue-on-error: true
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          # IP directa de Hostinger — evita que Cloudflare bloquee el puerto 21
+          server: 82.29.154.253
+          username: u905238757.vivaaustralia.com.au
+          password: ${{ secrets.FTP_PASSWORD }}
+          port: 21
+          # ftps con security:loose omite validación del cert (necesario con IP directa)
+          protocol: ftps
+          security: loose
+          server-dir: /public_html/wp-content/plugins/viva-pre-evm/
+          local-dir: ./
+          timeout: 300000
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github/**
+            **/node_modules/**
+
+      - name: Deploy con FTP (reintento si falló)
+        if: steps.ftp1.outcome == 'failure'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: 82.29.154.253
+          username: u905238757.vivaaustralia.com.au
+          password: ${{ secrets.FTP_PASSWORD }}
+          port: 21
+          protocol: ftps
+          security: loose
+          server-dir: /public_html/wp-content/plugins/viva-pre-evm/
+          local-dir: ./
+          timeout: 300000
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github/**
+            **/node_modules/**
